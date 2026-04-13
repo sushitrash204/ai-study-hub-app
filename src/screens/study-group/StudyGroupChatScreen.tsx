@@ -1,0 +1,540 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  Alert,
+  Keyboard,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as studyGroupService from '../../services/studyGroupService';
+import { useAuthStore } from '../../store/authStore';
+
+const StudyGroupChatScreen = ({ route, navigation }: any) => {
+  const { groupId } = route.params;
+  const { user } = useAuthStore();
+
+  const [groupName, setGroupName] = useState('');
+  const [messages, setMessages] = useState<any[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+  const isInitialLoad = useRef(true);
+
+  useEffect(() => {
+    loadGroupInfo();
+    loadMessages(true);
+  }, [groupId]);
+
+  const loadGroupInfo = async () => {
+    try {
+      const groupData = await studyGroupService.getStudyGroupDetail(groupId);
+      setGroupName(groupData.name || 'Nhóm học tập');
+    } catch (error) {
+      console.error('Error loading group info:', error);
+    }
+  };
+
+  const loadMessages = async (initial = false) => {
+    try {
+      if (initial) {
+        setLoading(true);
+        setOffset(0);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const limit = 20;
+      const currentOffset = initial ? 0 : offset;
+
+      const msgs = await studyGroupService.getMessages(groupId, limit, currentOffset);
+      const msgsArray = Array.isArray(msgs) ? msgs : msgs?.data || msgs?.messages || [];
+
+      if (initial) {
+        setMessages(msgsArray);
+        setOffset(msgsArray.length);
+        if (msgsArray.length < limit) setHasMore(false);
+
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+          isInitialLoad.current = false;
+        }, 100);
+      } else {
+        if (msgsArray.length < limit) setHasMore(false);
+
+        setMessages(prev => [...msgsArray.reverse(), ...prev]);
+        setOffset(prev => prev + msgsArray.length);
+        setLoadingMore(false);
+      }
+    } catch (error: any) {
+      console.error('Error loading messages:', error);
+      setLoadingMore(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !loadingMore && !loading && !isInitialLoad.current) {
+      loadMessages(false);
+    }
+  }, [hasMore, loadingMore, loading]);
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim() || sending) return;
+
+    try {
+      setSending(true);
+      const text = inputText.trim();
+      setInputText('');
+      Keyboard.dismiss();
+
+      const tempMsg = {
+        _id: `temp-${Date.now()}`,
+        groupId,
+        userId: user?.id,
+        content: text,
+        type: 'TEXT',
+        createdAt: new Date().toISOString(),
+        user: { firstName: user?.firstName, lastName: user?.lastName },
+      };
+      setMessages(prev => [...prev, tempMsg]);
+
+      await studyGroupService.sendMessage(groupId, text, 'TEXT');
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      Alert.alert('Lỗi', 'Không thể gửi tin nhắn');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const renderMessage = ({ item, index }: any) => {
+    const isOwnMessage = item.userId === user?.id;
+    const prevMsg = index > 0 ? messages[index - 1] : null;
+    const showAvatar = !prevMsg || prevMsg.userId !== item.userId;
+    const showName = !isOwnMessage && showAvatar;
+
+    return (
+      <View style={[
+        styles.messageRow,
+        isOwnMessage && styles.ownMessageRow,
+        !showAvatar && styles.messageRowCompact,
+      ]}>
+        <View style={[
+          styles.avatarContainer,
+          !showAvatar && styles.avatarHidden,
+        ]}>
+          <View style={[
+            styles.avatar,
+            isOwnMessage ? styles.ownAvatar : styles.otherAvatar,
+          ]}>
+            <Text style={[
+              styles.avatarText,
+              isOwnMessage ? styles.ownAvatarText : styles.otherAvatarText,
+            ]}>
+              {item.user?.firstName?.[0]?.toUpperCase() || 'U'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[
+          styles.messageContent,
+          isOwnMessage ? styles.ownMessageContent : styles.otherMessageContent,
+        ]}>
+          {showName && (
+            <Text style={styles.senderName}>
+              {item.user?.firstName} {item.user?.lastName}
+            </Text>
+          )}
+
+          {item.type === 'TEXT' ? (
+            <View style={[
+              styles.textBubble,
+              isOwnMessage ? styles.ownTextBubble : styles.otherTextBubble,
+            ]}>
+              <Text style={[
+                styles.textMessage,
+                isOwnMessage ? styles.ownTextMessage : styles.otherTextMessage,
+              ]}>
+                {item.content}
+              </Text>
+            </View>
+          ) : item.type === 'RESULT' ? (
+            <View style={styles.resultCard}>
+              <View style={styles.resultCardHeader}>
+                <View style={styles.resultIconContainer}>
+                  <Ionicons name="trophy" size={16} color="#fff" />
+                </View>
+                <View style={styles.resultCardInfo}>
+                  <Text style={styles.resultCardLabel}>Kết quả bài tập</Text>
+                  <Text style={styles.resultCardTitle} numberOfLines={1}>
+                    {item.resource?.exercise?.title || 'Bài tập'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.resultCardBody}>
+                <View style={styles.resultScoreSection}>
+                  <Text style={styles.resultScoreLabel}>Điểm số</Text>
+                  <Text style={styles.resultScoreValue}>
+                    {item.resource?.score?.toFixed(1) || '0'}
+                    <Text style={styles.resultScoreTotal}>/10</Text>
+                  </Text>
+                </View>
+                <View style={styles.resultDivider} />
+                <View style={styles.resultCorrectSection}>
+                  <Text style={styles.resultScoreLabel}>Đúng/Tổng</Text>
+                  <Text style={styles.resultCorrectValue}>
+                    {item.resource?.correctCount || 0}
+                    <Text style={styles.resultCorrectTotal}>/{item.resource?.totalQuestions || 0}</Text>
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.resultCardFooter}>
+                <Text style={styles.resultCardFooterText}>
+                  {item.user?.firstName} {item.user?.lastName}
+                </Text>
+                <Text style={styles.resultCardFooterText}>
+                  {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.resourceCard}>
+              <View style={styles.resourceCardHeader}>
+                <View style={[
+                  styles.resourceIconContainer,
+                  item.type === 'DOCUMENT' ? styles.docIcon : styles.exerciseIcon,
+                ]}>
+                  <Ionicons
+                    name={item.type === 'DOCUMENT' ? 'document' : 'clipboard'}
+                    size={16}
+                    color="#fff"
+                  />
+                </View>
+                <View style={styles.resourceCardInfo}>
+                  <Text style={styles.resourceCardLabel}>
+                    {item.type === 'DOCUMENT' ? 'Học liệu' : 'Bài tập'}
+                  </Text>
+                  <Text style={styles.resourceCardTitle} numberOfLines={1}>
+                    {item.resource?.title || 'Chưa đặt tên'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.resourceCardMeta}>
+                <View style={styles.metaItem}>
+                  <Ionicons name={item.type === 'DOCUMENT' ? 'document-outline' : 'hash'} size={10} color="#6366f1" />
+                  <Text style={styles.metaValue}>
+                    {item.type === 'DOCUMENT'
+                      ? (item.resource?.fileType?.toUpperCase() || 'PDF')
+                      : `${item.resource?.questionCount || 0} câu`}
+                  </Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Ionicons name="calendar-outline" size={10} color="#6b7280" />
+                  <Text style={styles.metaValue}>
+                    {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.resourceCardAction}
+                onPress={() => {
+                  if (item.type === 'DOCUMENT' && item.resourceId) {
+                    navigation.navigate('PDFViewer', { documentId: item.resourceId });
+                  } else if (item.resourceId) {
+                    navigation.navigate('ExerciseDetail', { exerciseId: item.resourceId });
+                  }
+                }}
+              >
+                <Text style={styles.resourceCardActionText}>
+                  {item.type === 'DOCUMENT' ? 'Xem tài liệu' : 'Làm bài'}
+                </Text>
+                <Ionicons name="arrow-forward" size={12} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={[
+            styles.messageTime,
+            isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
+          ]}>
+            {new Date(item.createdAt).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text>Chưa đăng nhập</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={18} color="#6366f1" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{groupName}</Text>
+              <View style={styles.onlineIndicator}>
+                <View style={styles.onlineDot} />
+                <Text style={styles.onlineText}>Đang kết nối</Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('StudyGroupDetail', { groupId })}
+            style={styles.infoButton}
+          >
+            <Ionicons name="information-circle-outline" size={20} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Messages */}
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="chatbubble-ellipses-outline" size={28} color="#6366f1" />
+            </View>
+            <Text style={styles.emptyTitle}>Chưa có tin nhắn</Text>
+            <Text style={styles.emptySubtitle}>Hãy bắt đầu cuộc trò chuyện!</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item._id || item.id || Math.random().toString()}
+            style={styles.messagesList}
+            contentContainerStyle={styles.messagesContent}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.1}
+            ListHeaderComponent={
+              loadingMore ? (
+                <View style={styles.loadingMore}>
+                  <ActivityIndicator size="small" color="#6366f1" />
+                </View>
+              ) : null
+            }
+          />
+        )}
+
+        {/* Input Bar */}
+        <View style={styles.inputContainer}>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập tin nhắn..."
+              placeholderTextColor="#9ca3af"
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              editable={!sending}
+              maxLength={1000}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!inputText.trim() || sending) && styles.sendButtonDisabled,
+              ]}
+              onPress={handleSendMessage}
+              disabled={sending || !inputText.trim()}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
+
+export default StudyGroupChatScreen;
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f3f5f9' },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  backButton: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center',
+  },
+  headerInfo: { flex: 1 },
+  headerTitle: { fontSize: 13, fontWeight: '700', color: '#111827' },
+  onlineIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  onlineDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#10b981' },
+  onlineText: { fontSize: 8, fontWeight: '600', color: '#9ca3af' },
+  infoButton: { padding: 4 },
+
+  // Messages
+  messagesList: { flex: 1 },
+  messagesContent: { paddingHorizontal: 12, paddingVertical: 12 },
+  loadingMore: { paddingVertical: 8, alignItems: 'center' },
+
+  // Message Row
+  messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 8 },
+  ownMessageRow: { flexDirection: 'row-reverse' },
+  messageRowCompact: { marginTop: 2 },
+
+  // Avatar
+  avatarContainer: { width: 24, alignItems: 'center' },
+  avatarHidden: { opacity: 0 },
+  avatar: { width: 24, height: 24, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
+  ownAvatar: { backgroundColor: '#6366f1' },
+  otherAvatar: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
+  avatarText: { fontSize: 9, fontWeight: '700' },
+  ownAvatarText: { color: '#fff' },
+  otherAvatarText: { color: '#6366f1' },
+
+  // Message Content
+  messageContent: { maxWidth: '78%' },
+  ownMessageContent: { alignItems: 'flex-end' },
+  otherMessageContent: { alignItems: 'flex-start' },
+  senderName: { fontSize: 8, fontWeight: '600', color: '#9ca3af', marginBottom: 2, marginLeft: 2 },
+
+  // Text Bubble
+  textBubble: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
+  ownTextBubble: { backgroundColor: '#6366f1', borderBottomRightRadius: 3 },
+  otherTextBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#f3f4f6' },
+  textMessage: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  ownTextMessage: { color: '#fff' },
+  otherTextMessage: { color: '#1f2937' },
+
+  // Result Card - thu nhỏ
+  resultCard: {
+    backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden',
+    minWidth: 200, maxWidth: 260, borderWidth: 1, borderColor: '#d1fae5',
+  },
+  resultCardHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#ecfdf5',
+  },
+  resultIconContainer: {
+    width: 28, height: 28, borderRadius: 8, backgroundColor: '#059669',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  resultCardInfo: { flex: 1 },
+  resultCardLabel: { fontSize: 7, fontWeight: '700', color: '#059669', textTransform: 'uppercase', letterSpacing: 0.5 },
+  resultCardTitle: { fontSize: 11, fontWeight: '600', color: '#111827' },
+  resultCardBody: { padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  resultScoreLabel: { fontSize: 7, fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 2 },
+  resultScoreValue: { fontSize: 18, fontWeight: '800', color: '#059669' },
+  resultScoreTotal: { fontSize: 10, color: '#9ca3af' },
+  resultDivider: { width: 1, height: 30, backgroundColor: '#f3f4f6' },
+  resultCorrectValue: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  resultCorrectTotal: { fontSize: 10, color: '#9ca3af' },
+  resultCardFooter: {
+    flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#f9fafb',
+  },
+  resultCardFooterText: { fontSize: 7, fontWeight: '600', color: '#9ca3af' },
+
+  // Resource Card - thu nhỏ
+  resourceCard: {
+    backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden',
+    minWidth: 220, maxWidth: 280, borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  resourceCardHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#f9fafb',
+  },
+  resourceIconContainer: {
+    width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center',
+  },
+  docIcon: { backgroundColor: '#6366f1' },
+  exerciseIcon: { backgroundColor: '#6366f1' },
+  resourceCardInfo: { flex: 1 },
+  resourceCardLabel: { fontSize: 7, fontWeight: '700', color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.5 },
+  resourceCardTitle: { fontSize: 11, fontWeight: '600', color: '#111827' },
+  resourceCardMeta: {
+    flexDirection: 'row', gap: 10, padding: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f3f4f6',
+  },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaValue: { fontSize: 9, fontWeight: '600', color: '#374151' },
+  resourceCardAction: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    paddingVertical: 10, backgroundColor: '#6366f1',
+  },
+  resourceCardActionText: { fontSize: 9, fontWeight: '700', color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
+
+  // Timestamp
+  messageTime: { fontSize: 8, fontWeight: '500', color: '#d1d5db', marginTop: 2, marginLeft: 2 },
+  ownMessageTime: { color: 'rgba(255,255,255,0.5)' },
+
+  // Empty State
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  emptyIcon: {
+    width: 48, height: 48, borderRadius: 16, backgroundColor: '#eef2ff',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+  },
+  emptyTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 4 },
+  emptySubtitle: { fontSize: 12, fontWeight: '500', color: '#9ca3af', textAlign: 'center' },
+
+  // Input
+  inputContainer: {
+    backgroundColor: '#fff', paddingHorizontal: 10, paddingTop: 6, paddingBottom: Platform.OS === 'ios' ? 20 : 6,
+    borderTopWidth: 1, borderTopColor: '#e5e7eb',
+  },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#f3f4f6',
+    borderRadius: 18, paddingHorizontal: 4, paddingVertical: 3,
+  },
+  input: {
+    flex: 1, paddingHorizontal: 8, paddingVertical: 8, fontSize: 13,
+    color: '#1f2937', maxHeight: 80, minHeight: 32,
+  },
+  sendButton: {
+    width: 34, height: 34, borderRadius: 14, backgroundColor: '#6366f1',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 1,
+  },
+  sendButtonDisabled: { backgroundColor: '#d1d5db' },
+});
