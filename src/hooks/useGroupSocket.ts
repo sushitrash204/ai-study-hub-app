@@ -1,16 +1,32 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import io, { Socket } from 'socket.io-client';
+import { useAuthStore } from '../store/authStore';
 
-const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const SOCKET_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000').replace(/\/api$/, '');
 
 interface SocketMessage {
   id: string;
+  _id?: string;
   groupId: string;
   userId: string;
   content: string;
-  type: 'TEXT' | 'DOCUMENT' | 'EXERCISE';
+  type: 'TEXT' | 'DOCUMENT' | 'EXERCISE' | 'RESULT';
   resourceId?: string;
   createdAt: string;
+  user?: {
+    firstName: string;
+    lastName: string;
+    avatarUrl?: string;
+  };
+  resource?: any;
+  replyTo?: {
+    userId: string;
+    content: string;
+    user?: {
+      firstName: string;
+      lastName: string;
+    };
+  };
 }
 
 interface ConnectionStatus {
@@ -45,13 +61,18 @@ export const useGroupSocket = (options: UseGroupSocketOptions) => {
   });
   const [activeUsers, setActiveUsers] = useState(0);
 
+  const { accessToken } = useAuthStore();
+
   // Initialize socket connection
   useEffect(() => {
     try {
+      if (!accessToken) return;
+
       const socket = io(SOCKET_URL, {
         auth: {
-          token: localStorage?.getItem?.('token') || sessionStorage?.getItem?.('token'),
+          token: accessToken,
         },
+        transports: ['websocket'],
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,

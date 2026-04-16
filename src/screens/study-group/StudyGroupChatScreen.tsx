@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as studyGroupService from '../../services/studyGroupService';
 import { useAuthStore } from '../../store/authStore';
+import { useGroupSocket } from '../../hooks/useGroupSocket';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 const StudyGroupChatScreen = ({ route, navigation }: any) => {
   const { groupId } = route.params;
@@ -32,6 +34,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionList, setSuggestionList] = useState<any[]>([]);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const isInitialLoad = useRef(true);
 
@@ -39,6 +42,40 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
     loadGroupInfo();
     loadMessages(true);
   }, [groupId]);
+
+  // Socket for real-time messages
+  const { activeUsers } = useGroupSocket({
+    groupId,
+    userId: user?.id || '',
+    onNewMessage: (newMsg) => {
+      setMessages(prev => {
+        // Check if message already exists (either as temp or already received)
+        const exists = prev.some(m => m._id === newMsg._id || m._id === newMsg.id);
+        if (exists) return prev;
+
+        // Try to find if this is a response to our just-sent temp message
+        // We look for a temp message with the same content sent by us recently
+        const tempIndex = prev.findIndex(m => 
+          m._id.startsWith('temp-') && 
+          m.userId === newMsg.userId && 
+          m.content === newMsg.content
+        );
+
+        if (tempIndex !== -1) {
+          const updated = [...prev];
+          updated[tempIndex] = newMsg;
+          return updated;
+        }
+
+        return [...prev, newMsg];
+      });
+
+      // Always scroll to bottom for new messages
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 200);
+    },
+  });
 
   const loadGroupInfo = async () => {
     try {
@@ -113,18 +150,19 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
         type: 'TEXT',
         createdAt: new Date().toISOString(),
         user: { firstName: user?.firstName, lastName: user?.lastName },
+        replyTo: replyingTo ? {
+          userId: replyingTo.userId,
+          content: replyingTo.content,
+          user: replyingTo.user,
+        } : null,
       };
       setMessages(prev => [...prev, tempMsg]);
       
+      const replyId = replyingTo?._id;
+      setReplyingTo(null);
+
       // Luôn gửi tin nhắn của người dùng vào nhóm trước
-      await studyGroupService.sendMessage(groupId, text, 'TEXT');
-      
-      // Nếu có tag @ai hoặc @summary, gọi AI sau
-      if (text.toLowerCase().startsWith('@ai')) {
-        await studyGroupService.chatWithGroupAI(groupId, text.slice(3).trim());
-      } else if (text.toLowerCase().startsWith('@summary')) {
-        await studyGroupService.summarizeGroupChat(groupId);
-      }
+      await studyGroupService.sendMessage(groupId, text, 'TEXT', undefined, replyId);
 
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -169,6 +207,29 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
     setShowSuggestions(false);
   };
 
+  const renderContentWithMentions = (content: string, isOwnMessage: boolean, isAi: boolean) => {
+    if (!content) return null;
+
+    const parts = content.split(/(@[\w\d.-]+)/g);
+    return (
+      <Text style={[
+        styles.textMessage,
+        isOwnMessage ? styles.ownTextMessage : (isAi ? styles.aiTextMessage : styles.otherTextMessage),
+      ]}>
+        {parts.map((part, index) => {
+          if (part.startsWith('@')) {
+            return (
+              <Text key={index} style={styles.mentionText}>
+                {part}
+              </Text>
+            );
+          }
+          return part;
+        })}
+      </Text>
+    );
+  };
+
   const renderMessage = ({ item, index }: any) => {
     const isOwnMessage = item.userId === user?.id;
     const isAi = item.userId === 'AI_ASSISTANT';
@@ -196,10 +257,14 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
           </View>
         </View>
 
-        <View style={[
-          styles.messageContent,
-          isOwnMessage ? styles.ownMessageContent : styles.otherMessageContent,
-        ]}>
+        <TouchableOpacity 
+          style={[
+            styles.messageContent,
+            isOwnMessage ? styles.ownMessageContent : styles.otherMessageContent,
+          ]}
+          onLongPress={() => setReplyingTo(item)}
+          activeOpacity={0.8}
+        >
           {showName && (
             <Text style={styles.senderName}>
               {isAi ? 'Hệ thống AI' : `${item.user?.firstName} ${item.user?.lastName}`}
@@ -211,12 +276,20 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
               styles.textBubble,
               isOwnMessage ? styles.ownTextBubble : (isAi ? styles.aiTextBubble : styles.otherTextBubble),
             ]}>
-              <Text style={[
-                styles.textMessage,
-                isOwnMessage ? styles.ownTextMessage : (isAi ? styles.aiTextMessage : styles.otherTextMessage),
-              ]}>
-                {item.content}
-              </Text>
+              {item.replyTo && (
+                <View style={[
+                  styles.replyContext,
+                  isOwnMessage ? styles.ownReplyContext : styles.otherReplyContext
+                ]}>
+                  <Text style={styles.replySender} numberOfLines={1}>
+                    {item.replyTo.userId === user?.id ? 'Bạn' : (item.replyTo.user?.firstName || 'AI')}
+                  </Text>
+                  <Text style={styles.replyText} numberOfLines={1}>
+                    {item.replyTo.content}
+                  </Text>
+                </View>
+              )}
+              {renderContentWithMentions(item.content, isOwnMessage, isAi)}
             </View>
           ) : item.type === 'RESULT' ? (
             <View style={styles.resultCard}>
@@ -281,7 +354,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
               </View>
               <View style={styles.resourceCardMeta}>
                 <View style={styles.metaItem}>
-                  <Ionicons name={item.type === 'DOCUMENT' ? 'document-text-outline' : 'list-outline'} size={10} color="#6366f1" />
+                  <Ionicons name={item.type === 'DOCUMENT' ? 'document-text-outline' : 'list-outline'} size={10} color="#8B5CF6" />
                   <Text style={styles.metaValue}>
                     {item.type === 'DOCUMENT'
                       ? (item.resource?.fileType?.toUpperCase() || 'PDF')
@@ -313,6 +386,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
             </View>
           )}
 
+          </TouchableOpacity>
           <Text style={[
             styles.messageTime,
             isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
@@ -323,7 +397,6 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
             })}
           </Text>
         </View>
-      </View>
     );
   };
 
@@ -346,7 +419,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={18} color="#6366f1" />
+              <Ionicons name="arrow-back" size={24} color="#8B5CF6" />
             </TouchableOpacity>
             <View style={styles.headerInfo}>
               <Text style={styles.headerTitle} numberOfLines={1}>{groupName}</Text>
@@ -361,7 +434,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
               onPress={() => navigation.navigate('StudyGroupDetail', { groupId })}
               style={styles.infoButton}
             >
-              <Ionicons name="information-circle-outline" size={20} color="#6b7280" />
+              <Ionicons name="information-circle-outline" size={24} color="#6b7280" />
             </TouchableOpacity>
           </View>
         </View>
@@ -369,12 +442,12 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
         {/* Messages */}
         {loading ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#6366f1" />
+            <ActivityIndicator size="large" color="#8B5CF6" />
           </View>
         ) : messages.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="chatbubble-ellipses-outline" size={28} color="#6366f1" />
+              <Ionicons name="chatbubble-ellipses-outline" size={28} color="#8B5CF6" />
             </View>
             <Text style={styles.emptyTitle}>Chưa có tin nhắn</Text>
             <Text style={styles.emptySubtitle}>Hãy bắt đầu cuộc trò chuyện!</Text>
@@ -392,7 +465,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
             ListHeaderComponent={
               loadingMore ? (
                 <View style={styles.loadingMore}>
-                  <ActivityIndicator size="small" color="#6366f1" />
+                  <ActivityIndicator size="small" color="#8B5CF6" />
                 </View>
               ) : null
             }
@@ -408,7 +481,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
                 style={[styles.suggestionItem, idx < suggestionList.length - 1 && styles.suggestionDivider]}
                 onPress={() => applySuggestion(item)}
               >
-                <Ionicons name={item.type === 'AI' ? 'sparkles' : 'person'} size={14} color="#6366f1" />
+                <Ionicons name={item.type === 'AI' ? 'sparkles' : 'person'} size={14} color="#8B5CF6" />
                 <Text style={styles.suggestionText}>{item.name}</Text>
               </TouchableOpacity>
             ))}
@@ -417,6 +490,22 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
 
         {/* Input Bar */}
         <View style={styles.inputContainer}>
+          {replyingTo && (
+            <View style={styles.replyPreviewContainer}>
+              <View style={styles.replyPreviewBadge} />
+              <View style={styles.replyPreviewContent}>
+                <Text style={styles.replyPreviewTitle}>
+                  Đang trả lời {replyingTo.userId === user?.id ? 'chính mình' : (replyingTo.user?.firstName || 'AI')}
+                </Text>
+                <Text style={styles.replyPreviewText} numberOfLines={1}>
+                  {replyingTo.content}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.closeReplyButton}>
+                <Ionicons name="close-circle" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
@@ -474,10 +563,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center',
   },
   headerInfo: { flex: 1 },
-  headerTitle: { fontSize: 13, fontWeight: '700', color: '#111827' },
+  headerTitle: { fontSize: TYPOGRAPHY.size.h3, fontWeight: TYPOGRAPHY.weight.black, color: '#111827' },
   onlineIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  onlineDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#10b981' },
-  onlineText: { fontSize: 8, fontWeight: '600', color: '#9ca3af' },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' },
+  onlineText: { fontSize: TYPOGRAPHY.size.small - 1, fontWeight: TYPOGRAPHY.weight.bold, color: '#9ca3af' },
   infoButton: { padding: 4 },
 
   // Messages
@@ -494,28 +583,28 @@ const styles = StyleSheet.create({
   avatarContainer: { width: 24, alignItems: 'center' },
   avatarHidden: { opacity: 0 },
   avatar: { width: 24, height: 24, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
-  ownAvatar: { backgroundColor: '#6366f1' },
+  ownAvatar: { backgroundColor: '#8B5CF6' },
   otherAvatar: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
   aiAvatar: { backgroundColor: '#8b5cf6' },
   avatarText: { fontSize: 9, fontWeight: '700' },
   ownAvatarText: { color: '#fff' },
-  otherAvatarText: { color: '#6366f1' },
+  otherAvatarText: { color: '#8B5CF6' },
   aiAvatarText: { color: '#fff' },
 
   // Message Content
   messageContent: { maxWidth: '78%' },
   ownMessageContent: { alignItems: 'flex-end' },
   otherMessageContent: { alignItems: 'flex-start' },
-  senderName: { fontSize: 8, fontWeight: '600', color: '#9ca3af', marginBottom: 2, marginLeft: 2 },
+  senderName: { fontSize: TYPOGRAPHY.size.body - 1, fontWeight: TYPOGRAPHY.weight.bold, color: '#4b5563', marginBottom: 2, marginLeft: 12 },
 
   // Text Bubble
   textBubble: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
-  ownTextBubble: { backgroundColor: '#6366f1', borderBottomRightRadius: 3 },
+  ownTextBubble: { backgroundColor: '#8B5CF6', borderBottomRightRadius: 3 },
   otherTextBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#f3f4f6' },
   aiTextBubble: { backgroundColor: '#f5f3ff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#ddd6fe' },
   textMessage: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  ownTextMessage: { color: '#fff' },
-  otherTextMessage: { color: '#1f2937' },
+  ownTextMessage: { fontSize: TYPOGRAPHY.size.body, color: '#fff', lineHeight: TYPOGRAPHY.size.body * 1.4 },
+  otherTextMessage: { fontSize: TYPOGRAPHY.size.body, color: '#1f2937', lineHeight: TYPOGRAPHY.size.body * 1.4 },
   aiTextMessage: { color: '#5b21b6' },
 
   // Result Card - thu nhỏ
@@ -558,24 +647,24 @@ const styles = StyleSheet.create({
   resourceIconContainer: {
     width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center',
   },
-  docIcon: { backgroundColor: '#6366f1' },
-  exerciseIcon: { backgroundColor: '#6366f1' },
+  docIcon: { backgroundColor: '#8B5CF6' },
+  exerciseIcon: { backgroundColor: '#8B5CF6' },
   resourceCardInfo: { flex: 1 },
-  resourceCardLabel: { fontSize: 7, fontWeight: '700', color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.5 },
-  resourceCardTitle: { fontSize: 11, fontWeight: '600', color: '#111827' },
+  resourceCardLabel: { fontSize: TYPOGRAPHY.size.tiny, fontWeight: TYPOGRAPHY.weight.black, color: '#8B5CF6', textTransform: 'uppercase', letterSpacing: 0.5 },
+  resourceCardTitle: { fontSize: TYPOGRAPHY.size.small, fontWeight: TYPOGRAPHY.weight.semibold, color: '#111827' },
   resourceCardMeta: {
     flexDirection: 'row', gap: 10, padding: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f3f4f6',
   },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaValue: { fontSize: 9, fontWeight: '600', color: '#374151' },
+  metaValue: { fontSize: TYPOGRAPHY.size.tiny, fontWeight: TYPOGRAPHY.weight.semibold, color: '#374151' },
   resourceCardAction: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    paddingVertical: 10, backgroundColor: '#6366f1',
+    paddingVertical: 10, backgroundColor: '#8B5CF6',
   },
-  resourceCardActionText: { fontSize: 9, fontWeight: '700', color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
+  resourceCardActionText: { fontSize: TYPOGRAPHY.size.tiny, fontWeight: TYPOGRAPHY.weight.black, color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
 
   // Timestamp
-  messageTime: { fontSize: 8, fontWeight: '500', color: '#d1d5db', marginTop: 2, marginLeft: 2 },
+  messageTime: { fontSize: TYPOGRAPHY.size.tiny, fontWeight: TYPOGRAPHY.weight.medium, color: '#d1d5db', marginTop: 2, marginLeft: 2 },
   ownMessageTime: { color: 'rgba(255,255,255,0.5)' },
   otherMessageTime: { color: '#9ca3af' },
 
@@ -585,8 +674,8 @@ const styles = StyleSheet.create({
     width: 48, height: 48, borderRadius: 16, backgroundColor: '#eef2ff',
     justifyContent: 'center', alignItems: 'center', marginBottom: 12,
   },
-  emptyTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  emptySubtitle: { fontSize: 12, fontWeight: '500', color: '#9ca3af', textAlign: 'center' },
+  emptyTitle: { fontSize: TYPOGRAPHY.size.h3, fontWeight: TYPOGRAPHY.weight.bold, color: '#111827', marginBottom: 4 },
+  emptySubtitle: { fontSize: TYPOGRAPHY.size.small, fontWeight: TYPOGRAPHY.weight.medium, color: '#9ca3af', textAlign: 'center' },
 
   // Input
   inputContainer: {
@@ -598,11 +687,11 @@ const styles = StyleSheet.create({
     borderRadius: 18, paddingHorizontal: 4, paddingVertical: 3,
   },
   input: {
-    flex: 1, paddingHorizontal: 8, paddingVertical: 8, fontSize: 13,
+    flex: 1, paddingHorizontal: 8, paddingVertical: 8, fontSize: TYPOGRAPHY.size.body,
     color: '#1f2937', maxHeight: 80, minHeight: 32,
   },
   sendButton: {
-    width: 34, height: 34, borderRadius: 14, backgroundColor: '#6366f1',
+    width: 34, height: 34, borderRadius: 14, backgroundColor: '#8B5CF6',
     justifyContent: 'center', alignItems: 'center', marginBottom: 1,
   },
   sendButtonDisabled: { backgroundColor: '#d1d5db' },
@@ -620,5 +709,71 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15, paddingVertical: 12,
   },
   suggestionDivider: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  suggestionText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  suggestionText: { fontSize: TYPOGRAPHY.size.body, fontWeight: TYPOGRAPHY.weight.semibold, color: '#374151' },
+
+  // Mentions
+  mentionText: { color: '#8b5cf6', fontWeight: '700' },
+
+  // Reply Context in Bubble
+  replyContext: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    padding: 6,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    marginBottom: 6,
+    minWidth: 120,
+  },
+  ownReplyContext: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderLeftColor: '#fff',
+  },
+  otherReplyContext: {
+    borderLeftColor: '#8B5CF6',
+  },
+  replySender: {
+    fontSize: TYPOGRAPHY.size.tiny,
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: '#8B5CF6',
+    marginBottom: 2,
+  },
+  replyText: {
+    fontSize: TYPOGRAPHY.size.small,
+    color: '#4b5563',
+  },
+
+  // Reply Preview above Input
+  replyPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#f9fafb',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    marginBottom: 6,
+  },
+  replyPreviewBadge: {
+    width: 3,
+    height: '100%',
+    backgroundColor: '#8B5CF6',
+    borderRadius: 1.5,
+    marginRight: 10,
+  },
+  replyPreviewContent: {
+    flex: 1,
+  },
+  replyPreviewTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#8B5CF6',
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 11,
+    color: '#6b7280',
+  },
+  closeReplyButton: {
+    padding: 4,
+  },
 });

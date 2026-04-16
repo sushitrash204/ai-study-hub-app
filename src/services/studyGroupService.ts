@@ -215,12 +215,14 @@ export const sendMessage = async (
   groupId: string,
   content: string,
   type: 'TEXT' | 'DOCUMENT' | 'EXERCISE' = 'TEXT',
-  resourceId?: string
+  resourceId?: string,
+  replyToMessageId?: string
 ): Promise<GroupMessage> => {
   const response = await api.post(`/study-groups/${groupId}/messages`, {
     content,
     type,
     resourceId,
+    replyToMessageId,
   });
   return response.data;
 };
@@ -302,7 +304,14 @@ export const summarizeGroupChat = async (groupId: string): Promise<{ summary: st
 /**
  * AI Group Chat Assistant
  */
-export const chatWithGroupAI = async (groupId: string, message: string): Promise<{ answer: string }> => {
-  const response = await api.post(`/study-groups/${groupId}/ai/chat`, { message });
+export const chatWithGroupAI = async (
+  groupId: string, 
+  message: string, 
+  replyToMessageId?: string
+): Promise<{ answer: string }> => {
+  const response = await api.post(`/study-groups/${groupId}/ai/chat`, { 
+    message,
+    replyToMessageId
+  });
   return response.data;
 };

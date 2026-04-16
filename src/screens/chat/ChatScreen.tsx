@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { TYPOGRAPHY } from '../../theme/typography';
 import * as documentService from '../../services/documentService';
 import * as subjectService from '../../services/subjectService';
 import * as chatService from '../../services/chatService';
@@ -575,7 +576,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 12,
     },
-    title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
+    title: { fontSize: TYPOGRAPHY.size.h1, fontWeight: TYPOGRAPHY.weight.black, color: '#1F2937' },
     contextBtn: {
         flexDirection: 'row',
         paddingHorizontal: 16,
@@ -588,13 +589,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#8B5CF6',
     },
     contextBtnIdle: {
-        backgroundColor: '#2563EB',
+        backgroundColor: '#8B5CF6', // Fixed: Changed from Blue (#2563EB) to Purple
     },
     contextBtnText: {
         color: '#fff',
-        fontWeight: 'bold',
+        fontWeight: TYPOGRAPHY.weight.bold,
         marginLeft: 6,
-        fontSize: 12,
+        fontSize: TYPOGRAPHY.size.body - 1,
     },
     quickActionCard: {
         marginHorizontal: 16,
@@ -602,23 +603,23 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         padding: 14,
         borderRadius: 16,
-        backgroundColor: '#EEF2FF',
+        backgroundColor: '#F5F3FF',
         borderWidth: 1,
-        borderColor: '#C7D2FE',
+        borderColor: '#DDD6FE',
     },
     quickActionCopy: {
         marginBottom: 12,
     },
     quickActionTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: '#312E81',
+        fontSize: TYPOGRAPHY.size.h3,
+        fontWeight: TYPOGRAPHY.weight.black,
+        color: '#1F2937',
         marginBottom: 4,
     },
     quickActionText: {
-        fontSize: 13,
-        lineHeight: 19,
-        color: '#4338CA',
+        fontSize: TYPOGRAPHY.size.body,
+        lineHeight: TYPOGRAPHY.size.body * 1.5,
+        color: '#4B5563',
     },
     quickActionButton: {
         alignSelf: 'flex-start',
@@ -633,9 +634,9 @@ const styles = StyleSheet.create({
     },
     quickActionButtonText: {
         marginLeft: 6,
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#6D28D9',
+        fontSize: TYPOGRAPHY.size.small,
+        fontWeight: TYPOGRAPHY.weight.black,
+        color: '#8B5CF6',
     },
     contextBanner: {
         marginHorizontal: 16,
@@ -652,9 +653,9 @@ const styles = StyleSheet.create({
     },
     contextBannerText: {
         marginLeft: 8,
-        color: '#6D28D9',
-        fontSize: 13,
-        fontWeight: '600',
+        color: '#8B5CF6',
+        fontSize: TYPOGRAPHY.size.body,
+        fontWeight: TYPOGRAPHY.weight.semibold,
         flex: 1,
     },
     chatContainer: {
@@ -674,10 +675,10 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         marginTop: 10,
-        fontSize: 16,
+        fontSize: TYPOGRAPHY.size.body,
         color: '#6B7280',
         textAlign: 'center',
-        lineHeight: 22,
+        lineHeight: TYPOGRAPHY.size.body * 1.5,
     },
     emptyActionButton: {
         marginTop: 16,
@@ -742,7 +743,7 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         paddingBottom: 12,
         maxHeight: 100,
-        fontSize: 16,
+        fontSize: TYPOGRAPHY.size.body,
         color: '#1F2937',
     },
     sendBtn: {
@@ -777,8 +778,8 @@ const styles = StyleSheet.create({
         marginBottom: 18,
     },
     modalTitle: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: TYPOGRAPHY.size.h2,
+        fontWeight: TYPOGRAPHY.weight.bold,
         color: '#111827',
     },
     modalLoaderBox: {

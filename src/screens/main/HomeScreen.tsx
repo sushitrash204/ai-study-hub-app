@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, FlatList,
     StatusBar, ActivityIndicator, RefreshControl, ScrollView, Alert,
-    Modal, TextInput
+    Modal, TextInput, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { useSubjects } from '../../hooks/subject/useSubjects';
 import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { Subject } from '../../models/Subject';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 const COLORS = [
     '#8B5CF6', '#7C3AED', '#6D28D9', '#C026D3', '#DB2777', // Row 1
@@ -95,9 +96,16 @@ export default function HomeScreen() {
 
             {/* Header Section */}
             <View style={styles.header}>
-                <View>
-                    <Text style={styles.greeting}>Xin chào,</Text>
-                    <Text style={styles.userName}>{user?.firstName} {user?.lastName}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Image
+                        source={require('../../../assets/icon.png')}
+                        style={{ width: 40, height: 40, marginRight: 12, borderRadius: 10 }}
+                        resizeMode="contain"
+                    />
+                    <View>
+                        <Text style={styles.greeting}>Xin chào,</Text>
+                        <Text style={styles.userName}>{user?.firstName} {user?.lastName}</Text>
+                    </View>
                 </View>
                 <TouchableOpacity
                     style={styles.notificationBtn}
@@ -324,13 +332,13 @@ const styles = StyleSheet.create({
         paddingTop: 20,
         paddingBottom: 25,
     },
-    greeting: { fontSize: 16, color: '#6B7280', fontWeight: '500', marginBottom: 4 },
-    userName: { fontSize: 22, fontWeight: 'bold', color: '#1F2937' },
+    greeting: { fontSize: TYPOGRAPHY.size.h3, color: '#6B7280', fontWeight: TYPOGRAPHY.weight.medium, marginBottom: 4 },
+    userName: { fontSize: TYPOGRAPHY.size.h2 + 2, fontWeight: TYPOGRAPHY.weight.black, color: '#1F2937' },
     content: { flex: 1, paddingHorizontal: 20 },
     tabContainer: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 15, gap: 12 },
     tabButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: '#F2F2F7' },
     activeTabButton: { backgroundColor: '#8B5CF6' },
-    tabText: { fontSize: 14, fontWeight: '900', color: '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 },
+    tabText: { fontSize: TYPOGRAPHY.size.body, fontWeight: TYPOGRAPHY.weight.black, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 },
     activeTabText: { color: '#fff' },
     gradeContainer: { paddingVertical: 5, marginBottom: 15 },
     gradeScroll: { paddingRight: 20, gap: 8 },
@@ -340,10 +348,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
     },
     selectedGradeItem: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
-    gradeText: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
+    gradeText: { fontSize: TYPOGRAPHY.size.body - 1, fontWeight: TYPOGRAPHY.weight.bold, color: '#6B7280' },
     selectedGradeText: { color: '#fff' },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-    sectionTitle: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
+    sectionTitle: { fontSize: TYPOGRAPHY.size.h1 - 2, fontWeight: TYPOGRAPHY.weight.bold, color: '#1F2937' },
     introWrap: { marginBottom: 12 },
     introHero: {
         backgroundColor: '#6D28D9',
@@ -364,21 +372,21 @@ const styles = StyleSheet.create({
     },
     introBadgeText: {
         color: '#FFFFFF',
-        fontSize: 10,
-        fontWeight: '800',
+        fontSize: TYPOGRAPHY.size.tiny,
+        fontWeight: TYPOGRAPHY.weight.black,
         textTransform: 'uppercase',
         letterSpacing: 0.6,
     },
     introTitle: {
         color: '#FFFFFF',
-        fontSize: 24,
-        fontWeight: '900',
+        fontSize: TYPOGRAPHY.size.h1,
+        fontWeight: TYPOGRAPHY.weight.black,
         marginBottom: 8,
     },
     introSubtitle: {
         color: 'rgba(255,255,255,0.9)',
-        fontSize: 14,
-        lineHeight: 20,
+        fontSize: TYPOGRAPHY.size.body,
+        lineHeight: TYPOGRAPHY.size.body * 1.4,
         marginBottom: 14,
     },
     introCta: {
@@ -390,8 +398,8 @@ const styles = StyleSheet.create({
     },
     introCtaText: {
         color: '#6D28D9',
-        fontSize: 13,
-        fontWeight: '800',
+        fontSize: TYPOGRAPHY.size.body - 1,
+        fontWeight: TYPOGRAPHY.weight.black,
     },
     introGrid: {
         flexDirection: 'row',
@@ -408,16 +416,16 @@ const styles = StyleSheet.create({
     },
     introCardTitle: {
         color: '#1F2937',
-        fontSize: 13,
-        fontWeight: '800',
+        fontSize: TYPOGRAPHY.size.body - 1,
+        fontWeight: TYPOGRAPHY.weight.black,
         marginTop: 8,
         marginBottom: 4,
     },
     introCardText: {
         color: '#6B7280',
-        fontSize: 12,
-        lineHeight: 17,
-        fontWeight: '500',
+        fontSize: TYPOGRAPHY.size.small,
+        lineHeight: TYPOGRAPHY.size.small * 1.5,
+        fontWeight: TYPOGRAPHY.weight.medium,
     },
     listContainer: { paddingBottom: 100 },
     row: { justifyContent: 'space-between', paddingHorizontal: 2 },
@@ -453,14 +461,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.2)',
     },
-    classBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
+    classBadgeText: { fontSize: TYPOGRAPHY.size.tiny, fontWeight: TYPOGRAPHY.weight.black, color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
     cardBottom: { marginTop: 8 },
-    cardLabel: { fontSize: 8, fontWeight: '800', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
-    cardTitle: { fontSize: 15, fontWeight: '800', color: '#fff', lineHeight: 20 },
+    cardLabel: { fontSize: TYPOGRAPHY.size.tiny, fontWeight: TYPOGRAPHY.weight.black, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
+    cardTitle: { fontSize: TYPOGRAPHY.size.h3, fontWeight: TYPOGRAPHY.weight.black, color: '#fff', lineHeight: TYPOGRAPHY.size.h3 * 1.2 },
     cardWatermark: { position: 'absolute', bottom: -10, right: -10, transform: [{ rotate: '-12deg' }] },
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
-    emptyText: { fontSize: 18, fontWeight: '600', color: '#8E8E93', marginTop: 10 },
-    emptySubText: { fontSize: 14, color: '#C7C7CC', marginTop: 5 },
+    emptyText: { fontSize: TYPOGRAPHY.size.h2, fontWeight: TYPOGRAPHY.weight.semibold, color: '#8E8E93', marginTop: 10 },
+    emptySubText: { fontSize: TYPOGRAPHY.size.body, color: '#C7C7CC', marginTop: 5 },
     fab: {
         position: 'absolute', bottom: 30, right: 30, width: 64, height: 64, borderRadius: 32,
         backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center',
@@ -487,19 +495,19 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '85%',
     },
-    modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 16 },
+    modalTitle: { fontSize: TYPOGRAPHY.size.h2, fontWeight: TYPOGRAPHY.weight.bold, color: '#111827', marginBottom: 16 },
     modalInput: {
         borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
-        fontSize: 15, marginBottom: 16,
+        fontSize: TYPOGRAPHY.size.body, marginBottom: 16,
     },
     colorPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     colorDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
     colorDotSelected: { borderColor: '#111827' },
     modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
     saveButton: { flex: 1, backgroundColor: '#8B5CF6', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-    saveButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+    saveButtonText: { color: '#fff', fontSize: TYPOGRAPHY.size.body, fontWeight: TYPOGRAPHY.weight.semibold },
     cancelButton: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-    cancelButtonText: { color: '#374151', fontSize: 15, fontWeight: '600' },
+    cancelButtonText: { color: '#374151', fontSize: TYPOGRAPHY.size.body, fontWeight: TYPOGRAPHY.weight.semibold },
     deleteButton: { backgroundColor: '#EF4444', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16 },
-    deleteButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+    deleteButtonText: { color: '#fff', fontSize: TYPOGRAPHY.size.body, fontWeight: TYPOGRAPHY.weight.semibold },
 });
