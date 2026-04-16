@@ -18,6 +18,12 @@ import * as studyGroupService from '../../services/studyGroupService';
 import { useAuthStore } from '../../store/authStore';
 import { useGroupSocket } from '../../hooks/useGroupSocket';
 import { TYPOGRAPHY } from '../../theme/typography';
+import ChatMarkdownMessage from '../../components/ChatMarkdownMessage';
+
+const hasComplexMarkdownStructure = (value: string): boolean => {
+  const text = String(value || '');
+  return /```|`|\n|^\s*[-*+]\s|^\s*\d+\.\s|^\s*>|\$\$|\\\(|\\\[|\\\]|\|.+\|/m.test(text);
+};
 
 const StudyGroupChatScreen = ({ route, navigation }: any) => {
   const { groupId } = route.params;
@@ -289,7 +295,11 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
                   </Text>
                 </View>
               )}
-              {renderContentWithMentions(item.content, isOwnMessage, isAi)}
+              <ChatMarkdownMessage 
+                content={item.content}
+                isUser={isOwnMessage}
+                fillWidth={isAi || hasComplexMarkdownStructure(item.content)}
+              />
             </View>
           ) : item.type === 'RESULT' ? (
             <View style={styles.resultCard}>
