@@ -1,11 +1,11 @@
-# 📱 AI Study Hub - Mobile Application
+# 📱 Aivora - Mobile Application
 
 ![Expo](https://img.shields.io/badge/Expo-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Zustand](https://img.shields.io/badge/Zustand-443E38?style=for-the-badge)
 
-**AI Study Hub App** là ứng dụng di động đa nền tảng (iOS & Android) giúp sinh viên có thể học tập mọi lúc, mọi nơi. Ứng dụng tập trung vào tính tương tác cao, thông báo tức thời và sự hỗ trợ mạnh mẽ từ trí tuệ nhân tạo.
+**Aivora App** là ứng dụng di động đa nền tảng (iOS & Android) giúp sinh viên có thể học tập mọi lúc, mọi nơi. Ứng dụng tập trung vào tính tương tác cao, thông báo tức thời và sự hỗ trợ mạnh mẽ từ trí tuệ nhân tạo.
 
 ---
 

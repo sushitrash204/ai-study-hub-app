@@ -15,6 +15,8 @@ export interface StudyGroup {
   };
   createdAt: string;
   updatedAt: string;
+  members?: any[];
+  GroupMembers?: any[];
 }
 
 export interface GroupMember {
@@ -286,5 +288,21 @@ export const uploadAvatar = async (
   const response = await api.post(`/study-groups/${groupId}/avatar`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  return response.data;
+};
+
+/**
+ * AI Group Summary
+ */
+export const summarizeGroupChat = async (groupId: string): Promise<{ summary: string }> => {
+  const response = await api.post(`/study-groups/${groupId}/ai/summary`);
+  return response.data;
+};
+
+/**
+ * AI Group Chat Assistant
+ */
+export const chatWithGroupAI = async (groupId: string, message: string): Promise<{ answer: string }> => {
+  const response = await api.post(`/study-groups/${groupId}/ai/chat`, { message });
   return response.data;
 };

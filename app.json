@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AI Study Hub",
+    "name": "Aivora",
     "slug": "PdfWhisper",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nghia.aistudyhub"
+      "bundleIdentifier": "com.nghia.aivora"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.nghia.aistudyhub"
+      "package": "com.nghia.aivora"
     },
     "web": {
       "favicon": "./assets/favicon.png"

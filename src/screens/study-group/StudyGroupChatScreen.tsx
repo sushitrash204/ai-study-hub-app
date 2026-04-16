@@ -22,6 +22,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
   const { user } = useAuthStore();
 
   const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,8 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionList, setSuggestionList] = useState<any[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const isInitialLoad = useRef(true);
 
@@ -41,6 +44,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
     try {
       const groupData = await studyGroupService.getStudyGroupDetail(groupId);
       setGroupName(groupData.name || 'Nhóm học tập');
+      setGroupMembers(groupData.members || groupData.GroupMembers || []);
     } catch (error) {
       console.error('Error loading group info:', error);
     }
@@ -59,8 +63,8 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
       const limit = 20;
       const currentOffset = initial ? 0 : offset;
 
-      const msgs = await studyGroupService.getMessages(groupId, limit, currentOffset);
-      const msgsArray = Array.isArray(msgs) ? msgs : msgs?.data || msgs?.messages || [];
+      const msgs: any = await studyGroupService.getMessages(groupId, limit, currentOffset);
+      const msgsArray: any[] = Array.isArray(msgs) ? msgs : msgs?.data || msgs?.messages || [];
 
       if (initial) {
         setMessages(msgsArray);
@@ -111,8 +115,16 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
         user: { firstName: user?.firstName, lastName: user?.lastName },
       };
       setMessages(prev => [...prev, tempMsg]);
-
+      
+      // Luôn gửi tin nhắn của người dùng vào nhóm trước
       await studyGroupService.sendMessage(groupId, text, 'TEXT');
+      
+      // Nếu có tag @ai hoặc @summary, gọi AI sau
+      if (text.toLowerCase().startsWith('@ai')) {
+        await studyGroupService.chatWithGroupAI(groupId, text.slice(3).trim());
+      } else if (text.toLowerCase().startsWith('@summary')) {
+        await studyGroupService.summarizeGroupChat(groupId);
+      }
 
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -125,10 +137,43 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
     }
   };
 
+  const handleInputChange = (text: string) => {
+    setInputText(text);
+    const lastWord = text.split(' ').pop() || '';
+    if (lastWord.startsWith('@')) {
+      const query = lastWord.slice(1).toLowerCase();
+      const members = groupMembers.map(m => ({ id: m.userId, name: `${m.user?.firstName} ${m.user?.lastName}`, type: 'MEMBER' }));
+      const all = [
+        { id: 'ai', name: 'ai (Trợ lý học tập)', type: 'AI' },
+        { id: 'summary', name: 'summary (Tóm tắt thảo luận)', type: 'AI' },
+        ...members
+      ];
+      const filtered = all.filter(item => item.name.toLowerCase().includes(query));
+      
+      if (filtered.length > 0) {
+        setSuggestionList(filtered);
+        setShowSuggestions(true);
+      } else {
+        setShowSuggestions(false);
+      }
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const applySuggestion = (item: any) => {
+    const words = inputText.split(' ');
+    words.pop(); // Remove the @query
+    const newText = [...words, `@${item.name.split(' (')[0]} `].join(' ').trimStart();
+    setInputText(newText);
+    setShowSuggestions(false);
+  };
+
   const renderMessage = ({ item, index }: any) => {
     const isOwnMessage = item.userId === user?.id;
-    const prevMsg = index > 0 ? messages[index - 1] : null;
-    const showAvatar = !prevMsg || prevMsg.userId !== item.userId;
+    const isAi = item.userId === 'AI_ASSISTANT';
+    const isInitial = index === 0;
+    const showAvatar = isInitial || messages[index - 1].userId !== item.userId;
     const showName = !isOwnMessage && showAvatar;
 
     return (
@@ -137,19 +182,16 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
         isOwnMessage && styles.ownMessageRow,
         !showAvatar && styles.messageRowCompact,
       ]}>
-        <View style={[
-          styles.avatarContainer,
-          !showAvatar && styles.avatarHidden,
-        ]}>
+        <View style={[styles.avatarContainer, !showAvatar && styles.avatarHidden]}>
           <View style={[
             styles.avatar,
-            isOwnMessage ? styles.ownAvatar : styles.otherAvatar,
+            isOwnMessage ? styles.ownAvatar : (isAi ? styles.aiAvatar : styles.otherAvatar),
           ]}>
             <Text style={[
               styles.avatarText,
-              isOwnMessage ? styles.ownAvatarText : styles.otherAvatarText,
+              isOwnMessage ? styles.ownAvatarText : (isAi ? styles.aiAvatarText : styles.otherAvatarText),
             ]}>
-              {item.user?.firstName?.[0]?.toUpperCase() || 'U'}
+              {isAi ? 'AI' : (item.user?.firstName?.[0]?.toUpperCase() || 'U')}
             </Text>
           </View>
         </View>
@@ -160,18 +202,18 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
         ]}>
           {showName && (
             <Text style={styles.senderName}>
-              {item.user?.firstName} {item.user?.lastName}
+              {isAi ? 'Hệ thống AI' : `${item.user?.firstName} ${item.user?.lastName}`}
             </Text>
           )}
 
           {item.type === 'TEXT' ? (
             <View style={[
               styles.textBubble,
-              isOwnMessage ? styles.ownTextBubble : styles.otherTextBubble,
+              isOwnMessage ? styles.ownTextBubble : (isAi ? styles.aiTextBubble : styles.otherTextBubble),
             ]}>
               <Text style={[
                 styles.textMessage,
-                isOwnMessage ? styles.ownTextMessage : styles.otherTextMessage,
+                isOwnMessage ? styles.ownTextMessage : (isAi ? styles.aiTextMessage : styles.otherTextMessage),
               ]}>
                 {item.content}
               </Text>
@@ -239,7 +281,7 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
               </View>
               <View style={styles.resourceCardMeta}>
                 <View style={styles.metaItem}>
-                  <Ionicons name={item.type === 'DOCUMENT' ? 'document-outline' : 'hash'} size={10} color="#6366f1" />
+                  <Ionicons name={item.type === 'DOCUMENT' ? 'document-text-outline' : 'list-outline'} size={10} color="#6366f1" />
                   <Text style={styles.metaValue}>
                     {item.type === 'DOCUMENT'
                       ? (item.resource?.fileType?.toUpperCase() || 'PDF')
@@ -314,12 +356,14 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('StudyGroupDetail', { groupId })}
-            style={styles.infoButton}
-          >
-            <Ionicons name="information-circle-outline" size={20} color="#6b7280" />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('StudyGroupDetail', { groupId })}
+              style={styles.infoButton}
+            >
+              <Ionicons name="information-circle-outline" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Messages */}
@@ -355,15 +399,31 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
           />
         )}
 
+        {/* Suggestions Overlay */}
+        {showSuggestions && (
+          <View style={styles.suggestionOverlay}>
+            {suggestionList.map((item, idx) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.suggestionItem, idx < suggestionList.length - 1 && styles.suggestionDivider]}
+                onPress={() => applySuggestion(item)}
+              >
+                <Ionicons name={item.type === 'AI' ? 'sparkles' : 'person'} size={14} color="#6366f1" />
+                <Text style={styles.suggestionText}>{item.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* Input Bar */}
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
-              placeholder="Nhập tin nhắn..."
+              placeholder="Hỏi AI @ai hoặc nhắn tin..."
               placeholderTextColor="#9ca3af"
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={handleInputChange}
               multiline
               editable={!sending}
               maxLength={1000}
@@ -407,6 +467,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  aiButton: { padding: 4 },
   backButton: {
     width: 30, height: 30, borderRadius: 8,
     backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center',
@@ -434,9 +496,11 @@ const styles = StyleSheet.create({
   avatar: { width: 24, height: 24, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
   ownAvatar: { backgroundColor: '#6366f1' },
   otherAvatar: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
+  aiAvatar: { backgroundColor: '#8b5cf6' },
   avatarText: { fontSize: 9, fontWeight: '700' },
   ownAvatarText: { color: '#fff' },
   otherAvatarText: { color: '#6366f1' },
+  aiAvatarText: { color: '#fff' },
 
   // Message Content
   messageContent: { maxWidth: '78%' },
@@ -448,9 +512,11 @@ const styles = StyleSheet.create({
   textBubble: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
   ownTextBubble: { backgroundColor: '#6366f1', borderBottomRightRadius: 3 },
   otherTextBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#f3f4f6' },
+  aiTextBubble: { backgroundColor: '#f5f3ff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#ddd6fe' },
   textMessage: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
   ownTextMessage: { color: '#fff' },
   otherTextMessage: { color: '#1f2937' },
+  aiTextMessage: { color: '#5b21b6' },
 
   // Result Card - thu nhỏ
   resultCard: {
@@ -471,7 +537,9 @@ const styles = StyleSheet.create({
   resultScoreLabel: { fontSize: 7, fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 2 },
   resultScoreValue: { fontSize: 18, fontWeight: '800', color: '#059669' },
   resultScoreTotal: { fontSize: 10, color: '#9ca3af' },
+  resultScoreSection: { alignItems: 'center' },
   resultDivider: { width: 1, height: 30, backgroundColor: '#f3f4f6' },
+  resultCorrectSection: { alignItems: 'center' },
   resultCorrectValue: { fontSize: 16, fontWeight: '800', color: '#111827' },
   resultCorrectTotal: { fontSize: 10, color: '#9ca3af' },
   resultCardFooter: {
@@ -509,6 +577,7 @@ const styles = StyleSheet.create({
   // Timestamp
   messageTime: { fontSize: 8, fontWeight: '500', color: '#d1d5db', marginTop: 2, marginLeft: 2 },
   ownMessageTime: { color: 'rgba(255,255,255,0.5)' },
+  otherMessageTime: { color: '#9ca3af' },
 
   // Empty State
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
@@ -537,4 +606,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginBottom: 1,
   },
   sendButtonDisabled: { backgroundColor: '#d1d5db' },
+
+  // Suggestions
+  suggestionOverlay: {
+    position: 'absolute', bottom: 70, left: 10, right: 10,
+    backgroundColor: '#fff', borderRadius: 12, elevation: 5,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 4, zIndex: 100,
+    borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 15, paddingVertical: 12,
+  },
+  suggestionDivider: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: '#374151' },
 });
