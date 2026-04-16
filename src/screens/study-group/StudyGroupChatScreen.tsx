@@ -602,19 +602,28 @@ const styles = StyleSheet.create({
   aiAvatarText: { color: '#fff' },
 
   // Message Content
-  messageContent: { maxWidth: '78%' },
+  messageContent: { maxWidth: '94%' },
   ownMessageContent: { alignItems: 'flex-end' },
   otherMessageContent: { alignItems: 'flex-start' },
-  senderName: { fontSize: TYPOGRAPHY.size.body - 1, fontWeight: TYPOGRAPHY.weight.bold, color: '#4b5563', marginBottom: 2, marginLeft: 12 },
+  senderName: { fontSize: TYPOGRAPHY.size.body - 1, fontWeight: TYPOGRAPHY.weight.bold, color: '#4b5563', marginBottom: 2, marginLeft: 8 },
 
   // Text Bubble
-  textBubble: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
-  ownTextBubble: { backgroundColor: '#8B5CF6', borderBottomRightRadius: 3 },
-  otherTextBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#f3f4f6' },
-  aiTextBubble: { backgroundColor: '#f5f3ff', borderBottomLeftRadius: 3, borderWidth: 1, borderColor: '#ddd6fe' },
+  textBubble: { 
+    borderRadius: 20, 
+    paddingHorizontal: 12, 
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  ownTextBubble: { backgroundColor: '#8B5CF6', borderBottomRightRadius: 4 },
+  otherTextBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#f3f4f6' },
+  aiTextBubble: { backgroundColor: '#f5f3ff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#ddd6fe' },
   textMessage: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  ownTextMessage: { fontSize: TYPOGRAPHY.size.body, color: '#fff', lineHeight: TYPOGRAPHY.size.body * 1.4 },
-  otherTextMessage: { fontSize: TYPOGRAPHY.size.body, color: '#1f2937', lineHeight: TYPOGRAPHY.size.body * 1.4 },
+  ownTextMessage: { fontSize: TYPOGRAPHY.size.body, color: '#fff', lineHeight: TYPOGRAPHY.size.body * 1.5 },
+  otherTextMessage: { fontSize: TYPOGRAPHY.size.body, color: '#1f2937', lineHeight: TYPOGRAPHY.size.body * 1.5 },
   aiTextMessage: { color: '#5b21b6' },
 
   // Result Card - thu nhỏ
