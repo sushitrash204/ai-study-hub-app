@@ -36,7 +36,7 @@ export default function NotificationsScreen() {
         {
           id: '1',
           type: 'INFO',
-          title: 'Chào mừng bạn đến với Aivora',
+          title: 'Chào mừng bạn đến với Yukon',
           message: 'Khám phá các tính năng học tập thông minh cùng AI.',
           createdAt: new Date().toISOString(),
           read: false,
