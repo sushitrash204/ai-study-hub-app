@@ -74,9 +74,9 @@ export const createStudyGroup = async (
 /**
  * List all public study groups
  */
-export const listStudyGroups = async (page = 1, limit = 10): Promise<any> => {
+export const listStudyGroups = async (page = 1, limit = 10, search?: string): Promise<any> => {
   const response = await api.get('/study-groups', {
-    params: { page, limit, isPublic: true },
+    params: { page, limit, isPublic: true, search },
   });
   return response.data;
 };
@@ -312,6 +312,83 @@ export const chatWithGroupAI = async (
   const response = await api.post(`/study-groups/${groupId}/ai/chat`, { 
     message,
     replyToMessageId
+  });
+  return response.data;
+};
+
+// ================= COMMUNITY POSTS =================
+
+export const createPost = async (groupId: string, content: string, subjectId?: string, imageFile?: any): Promise<any> => {
+  const formData = new FormData();
+  formData.append('content', content);
+  if (subjectId) {
+    formData.append('subjectId', subjectId);
+  }
+  if (imageFile) {
+    formData.append('image', imageFile as any);
+  }
+
+  const response = await api.post(`/study-groups/${groupId}/posts`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const getGroupPosts = async (groupId: string, page = 1, limit = 10): Promise<any> => {
+  const response = await api.get(`/study-groups/${groupId}/posts`, {
+    params: { page, limit },
+  });
+  return response.data;
+};
+
+export const getDiscoveryFeed = async (page = 1, limit = 10, subjectId?: string): Promise<any> => {
+  const response = await api.get('/study-groups/discovery-feed', {
+    params: { page, limit, subjectId },
+  });
+  return response.data;
+};
+
+export const togglePostLike = async (postId: string): Promise<any> => {
+  const response = await api.post(`/study-groups/posts/${postId}/like`);
+  return response.data;
+};
+
+export const getPostComments = async (postId: string): Promise<any> => {
+  const response = await api.get(`/study-groups/posts/${postId}/comments`);
+  return response.data;
+};
+
+export const createPostComment = async (postId: string, content: string, parentCommentId?: string): Promise<any> => {
+  const response = await api.post(`/study-groups/posts/${postId}/comments`, { content, parentCommentId });
+  return response.data;
+};
+
+export const createDiscoveryPost = async (content: string, imageFile?: any): Promise<any> => {
+  const formData = new FormData();
+  formData.append('content', content);
+  if (imageFile) {
+    formData.append('image', imageFile as any);
+  }
+
+  const response = await api.post('/study-groups/discovery-posts', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const deletePost = async (postId: string): Promise<any> => {
+  const response = await api.delete(`/study-groups/posts/${postId}`);
+  return response.data;
+};
+
+export const toggleSavePost = async (postId: string): Promise<{ saved: boolean }> => {
+  const response = await api.post(`/study-groups/posts/${postId}/save`);
+  return response.data;
+};
+
+export const getSavedPosts = async (page = 1, limit = 20): Promise<any> => {
+  const response = await api.get('/study-groups/posts/saved', {
+    params: { page, limit },
   });
   return response.data;
 };

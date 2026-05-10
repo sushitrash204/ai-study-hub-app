@@ -50,7 +50,7 @@ export const useStudyGroups = (options: { autoFetch?: boolean } = {}) => {
     async (page = 1, limit = 10, search?: string, isRefresh = false) => {
       isRefresh ? setIsRefreshing(true) : setIsLoading(true);
       try {
-        const response = await studyGroupService.listStudyGroups(page, limit);
+        const response = await studyGroupService.listStudyGroups(page, limit, search);
         setPublicGroups(response.groups || []);
       } catch (error: any) {
         console.error('Fetch public groups error:', error);

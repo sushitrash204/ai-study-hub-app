@@ -18,13 +18,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as studyGroupService from '../../services/studyGroupService';
+import { useAuthStore } from '../../store/authStore';
+import PostCard from '../../components/study-group/PostCard';
 
 const StudyGroupsListScreen = ({ navigation }: any) => {
+  const { user } = useAuthStore();
   const [myGroups, setMyGroups] = useState<any[]>([]);
   const [publicGroups, setPublicGroups] = useState<any[]>([]);
+  const [communityPosts, setCommunityPosts] = useState<any[]>([]);
+  const [savedPosts, setSavedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [tab, setTab] = useState<'my' | 'public'>('my');
+  const [tab, setTab] = useState<'my' | 'public' | 'community' | 'saved'>('my');
   const [joinCode, setJoinCode] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -41,21 +46,27 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
     loadGroups();
   }, []);
 
+  // Server-side search debounce cho nhóm công khai
+  useEffect(() => {
+    if (tab === 'public') {
+      const timer = setTimeout(() => {
+        loadGroups();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, tab]);
+
   const loadGroups = async () => {
     try {
       setLoading(true);
-      const [myGroupsData, publicGroupsData] = await Promise.all([
+      const [myGroupsData, publicGroupsData, feedData, savedData] = await Promise.all([
         studyGroupService.getUserStudyGroups(),
-        studyGroupService.listStudyGroups(1, 50),
+        studyGroupService.listStudyGroups(1, 50, tab === 'public' ? searchQuery : undefined),
+        tab === 'community' ? studyGroupService.getDiscoveryFeed(1, 20) : Promise.resolve({ data: communityPosts }),
+        tab === 'saved' ? studyGroupService.getSavedPosts(1, 50) : Promise.resolve({ data: savedPosts }),
       ]);
 
-      const myGroupsArray = Array.isArray(myGroupsData)
-        ? myGroupsData
-        : Array.isArray(myGroupsData?.groups)
-          ? myGroupsData.groups
-          : Array.isArray(myGroupsData?.data)
-            ? myGroupsData.data
-            : [];
+      const myGroupsArray = Array.isArray(myGroupsData) ? myGroupsData : [];
 
       const publicGroupsArray = Array.isArray(publicGroupsData?.groups)
         ? publicGroupsData.groups
@@ -67,6 +78,14 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
 
       setMyGroups(myGroupsArray);
       setPublicGroups(publicGroupsArray);
+      
+      if (tab === 'community' && feedData?.data) {
+        setCommunityPosts(feedData.data);
+      }
+
+      if (tab === 'saved' && savedData?.data) {
+        setSavedPosts(savedData.data);
+      }
     } catch (error: any) {
       console.error('Error loading groups:', error);
     } finally {
@@ -89,6 +108,32 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
     } catch (error: any) {
       Alert.alert('Lỗi', error.response?.data?.message || 'Không thể tham gia nhóm');
     }
+  };
+
+  const handleSavePost = async (postId: string) => {
+    try {
+      const result = await studyGroupService.toggleSavePost(postId);
+      
+      const updatePost = (p: any) => p.id === postId ? { ...p, isSaved: result.saved } : p;
+      
+      setCommunityPosts(prev => prev.map(updatePost));
+      setSavedPosts(prev => {
+        if (!result.saved) return prev.filter(p => p.id !== postId);
+        const postInFeed = communityPosts.find(p => p.id === postId);
+        if (postInFeed && !prev.find(p => p.id === postId)) {
+          return [{ ...postInFeed, isSaved: true }, ...prev];
+        }
+        return prev;
+      });
+
+      Alert.alert('Thành công', result.saved ? 'Đã lưu bài viết' : 'Đã bỏ lưu bài viết');
+    } catch (error) {
+      console.error('Save post error:', error);
+    }
+  };
+
+  const handleSharePost = async (post: any) => {
+    Alert.alert('Chia sẻ', 'Tính năng chia sẻ đang được phát triển (Demo)');
   };
 
   const pickAvatar = async () => {
@@ -167,14 +212,14 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
           {item.description || 'Chưa có mô tả'}
         </Text>
         <View style={styles.badgeRow}>
-          <View style={[styles.badge, item.isPublic ? styles.badgePublic : styles.badgePrivate]}>
+          <View style={[styles.badge, (String(item.isPublic) === 'true' || String(item.isPublic) === '1') ? styles.badgePublic : styles.badgePrivate]}>
             <Ionicons
-              name={item.isPublic ? 'earth' : 'lock-closed'}
+              name={(String(item.isPublic) === 'true' || String(item.isPublic) === '1') ? 'earth' : 'lock-closed'}
               size={10}
-              color={item.isPublic ? '#059669' : '#d97706'}
+              color={(String(item.isPublic) === 'true' || String(item.isPublic) === '1') ? '#059669' : '#d97706'}
             />
-            <Text style={[styles.badgeText, item.isPublic ? { color: '#059669' } : { color: '#d97706' }]}>
-              {item.isPublic ? 'Công khai' : 'Riêng tư'}
+            <Text style={[styles.badgeText, (String(item.isPublic) === 'true' || String(item.isPublic) === '1') ? { color: '#059669' } : { color: '#d97706' }]}>
+              {(String(item.isPublic) === 'true' || String(item.isPublic) === '1') ? 'Công khai' : 'Riêng tư'}
             </Text>
           </View>
           {item.memberCount && (
@@ -195,9 +240,56 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
   }
 
   const groups = tab === 'my' ? myGroups : publicGroups;
-  const filteredGroups = Array.isArray(groups)
-    ? groups.filter((g: any) => g.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
+  const filteredGroups = tab === 'my' 
+    ? Array.isArray(groups) ? groups.filter((g: any) => g.name?.toLowerCase().includes(searchQuery.toLowerCase())) : []
+    : groups; // publicGroups đã được search trên server
+
+  const [commPostContent, setCommPostContent] = useState('');
+  const [isPostingComm, setIsPostingComm] = useState(false);
+
+  const handleLikePost = async (postId: string) => {
+    try {
+      await studyGroupService.togglePostLike(postId);
+      loadGroups();
+    } catch (e) {}
+  };
+  const handleCommentPost = async (postId: string, content: string) => {
+    try {
+      await studyGroupService.createPostComment(postId, content);
+      loadGroups();
+    } catch (e) {}
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    try {
+      await studyGroupService.deletePost(postId);
+      setCommunityPosts(prev => prev.filter(p => p.id !== postId));
+      setSavedPosts(prev => prev.filter(p => p.id !== postId));
+      Alert.alert('Thành công', 'Đã xóa bài viết');
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể xóa bài viết');
+    }
+  };
+
+  const handleCreateCommunityPost = async () => {
+    if (!commPostContent.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập nội dung');
+      return;
+    }
+
+    try {
+      setIsPostingComm(true);
+      await studyGroupService.createDiscoveryPost(commPostContent.trim());
+      setCommPostContent('');
+      loadGroups();
+      Alert.alert('Thành công', 'Đã đăng bài lên cộng đồng');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.response?.data?.message || 'Không thể đăng bài');
+    } finally {
+      setIsPostingComm(false);
+    }
+  };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -219,60 +311,147 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'my' && styles.tabActive]}
-          onPress={() => setTab('my')}
-        >
-          <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
-            Nhóm của tôi
-          </Text>
-          {tab === 'my' && <View style={styles.tabIndicator} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'public' && styles.tabActive]}
-          onPress={() => setTab('public')}
-        >
-          <Text style={[styles.tabText, tab === 'public' && styles.tabTextActive]}>
-            Khám phá
-          </Text>
-          {tab === 'public' && <View style={styles.tabIndicator} />}
-        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'my' && styles.tabActive]}
+            onPress={() => setTab('my')}
+          >
+            <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
+              Nhóm của tôi
+            </Text>
+            {tab === 'my' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'public' && styles.tabActive]}
+            onPress={() => setTab('public')}
+          >
+            <Text style={[styles.tabText, tab === 'public' && styles.tabTextActive]}>
+              Gợi ý Nhóm
+            </Text>
+            {tab === 'public' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'community' && styles.tabActive]}
+            onPress={() => setTab('community')}
+          >
+            <Text style={[styles.tabText, tab === 'community' && styles.tabTextActive]}>
+              Cộng đồng
+            </Text>
+            {tab === 'community' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'saved' && styles.tabActive]}
+            onPress={() => setTab('saved')}
+          >
+            <Text style={[styles.tabText, tab === 'saved' && styles.tabTextActive]}>
+              Đã lưu
+            </Text>
+            {tab === 'saved' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Search */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color="#9ca3af" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm nhóm..."
-          placeholderTextColor="#9ca3af"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
+      {(tab === 'my' || tab === 'public') && (
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color="#9ca3af" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm nhóm..."
+            placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      )}
 
-      {/* Groups List */}
-      <FlatList
-        data={filteredGroups}
-        keyExtractor={(item) => item.id}
-        renderItem={renderGroup}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="people-outline" size={32} color="#6366f1" />
+      {/* Content List */}
+      {(tab === 'community' || tab === 'saved') ? (
+        <FlatList
+          data={tab === 'community' ? communityPosts : savedPosts}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            tab === 'community' ? (
+              <View style={styles.communityComposer}>
+                <View style={styles.composerRow}>
+                  <View style={styles.miniAvatar}>
+                    <Text style={styles.miniAvatarText}>
+                      {user?.firstName?.[0]?.toUpperCase() || 'U'}
+                    </Text>
+                  </View>
+                  <TextInput
+                    style={styles.composerInput}
+                    placeholder="Hôm nay bạn học được gì mới không?"
+                    placeholderTextColor="#9ca3af"
+                    value={commPostContent}
+                    onChangeText={setCommPostContent}
+                    multiline
+                  />
+                </View>
+                <View style={styles.composerFooter}>
+                  <Text style={styles.composerTarget}>Đăng lên Cộng đồng</Text>
+                  <TouchableOpacity 
+                    style={[styles.miniPostBtn, !commPostContent.trim() && styles.miniPostBtnDisabled]}
+                    onPress={handleCreateCommunityPost}
+                    disabled={isPostingComm || !commPostContent.trim()}
+                  >
+                    {isPostingComm ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.miniPostBtnText}>Đăng bài</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <PostCard
+              post={item}
+              currentUserId={user?.id}
+              onLike={handleLikePost}
+              onComment={(postId, content) => handleCommentPost(postId, content)}
+              onDelete={handleDeletePost}
+              onSave={handleSavePost}
+              onShare={handleSharePost}
+              onToggleComments={(postId) => { /* TODO handle local expansion if needed */ }}
+              isCommentsExpanded={false}
+              comments={[]}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="chatbubbles-outline" size={32} color="#6366f1" />
+              </View>
+              <Text style={styles.emptyText}>Chưa có bài viết nào từ cộng đồng</Text>
             </View>
-            <Text style={styles.emptyText}>
-              {tab === 'my' ? 'Chưa tham gia nhóm nào' : 'Không có nhóm công khai'}
-            </Text>
-            {tab === 'my' && (
-              <TouchableOpacity style={styles.emptyAction} onPress={() => setShowCreateModal(true)}>
-                <Text style={styles.emptyActionText}>Tạo nhóm mới</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        }
-        contentContainerStyle={styles.listContent}
-      />
+          }
+        />
+      ) : (
+        <FlatList
+          data={filteredGroups}
+          keyExtractor={(item) => item.id}
+          renderItem={renderGroup}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="people-outline" size={32} color="#6366f1" />
+              </View>
+              <Text style={styles.emptyText}>
+                {tab === 'my' ? 'Chưa tham gia nhóm nào' : 'Không có nhóm công khai'}
+              </Text>
+              {tab === 'my' && (
+                <TouchableOpacity style={styles.emptyAction} onPress={() => setShowCreateModal(true)}>
+                  <Text style={styles.emptyActionText}>Tạo nhóm mới</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          }
+          contentContainerStyle={styles.listContent}
+        />
+      )}
 
       {/* Join Modal */}
       <Modal visible={showJoinModal} transparent animationType="fade" onRequestClose={() => setShowJoinModal(false)}>
@@ -575,4 +754,66 @@ const styles = StyleSheet.create({
   visibilityTitle: { fontSize: 14, fontWeight: '700', color: '#374151' },
   visibilityTitleActive: { color: '#6366f1' },
   visibilityDesc: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  communityComposer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  miniAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  miniAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  composerInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1a1a1a',
+    paddingTop: 8,
+    minHeight: 40,
+  },
+  composerFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  composerTarget: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#10b981',
+    textTransform: 'uppercase',
+  },
+  miniPostBtn: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  miniPostBtnDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  miniPostBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });

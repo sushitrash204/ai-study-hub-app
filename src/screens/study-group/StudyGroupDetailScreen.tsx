@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as studyGroupService from '../../services/studyGroupService';
 import { useAuthStore } from '../../store/authStore';
+import PostCard from '../../components/study-group/PostCard';
 
 const StudyGroupDetailScreen = ({ route, navigation }: any) => {
   const { groupId } = route.params;
@@ -26,9 +27,15 @@ const StudyGroupDetailScreen = ({ route, navigation }: any) => {
   const [group, setGroup] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'info' | 'members' | 'resources'>('info');
+  const [tab, setTab] = useState<'posts' | 'info' | 'members' | 'resources'>('posts');
   const [resourceTypeTab, setResourceTypeTab] = useState<'DOCUMENT' | 'EXERCISE'>('DOCUMENT');
+  
+  // Post Composer
+  const [postContent, setPostContent] = useState('');
+  const [postImageUri, setPostImageUri] = useState<string | null>(null);
+  const [isPosting, setIsPosting] = useState(false);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -46,24 +53,26 @@ const StudyGroupDetailScreen = ({ route, navigation }: any) => {
   const loadGroupData = async () => {
     try {
       setLoading(true);
-      const [groupData, membersList, resourcesData] = await Promise.all([
+      const [groupData, membersList, resourcesData, postsData] = await Promise.all([
         studyGroupService.getStudyGroupDetail(groupId),
         studyGroupService.getGroupMembers(groupId),
         studyGroupService.getSharedResources(groupId).catch(() => []),
+        studyGroupService.getGroupPosts(groupId, 1, 20).catch(() => ({ data: [] })),
       ]);
       setGroup(groupData);
-      setMembers(Array.isArray(membersList) ? membersList : membersList?.data || []);
+      setMembers(Array.isArray(membersList) ? membersList : (membersList as any)?.data || []);
 
       const resourcesArray = Array.isArray(resourcesData)
         ? resourcesData
-        : Array.isArray(resourcesData?.resources)
-          ? resourcesData.resources
-          : Array.isArray(resourcesData?.data)
-            ? resourcesData.data
+        : Array.isArray((resourcesData as any)?.resources)
+          ? (resourcesData as any).resources
+          : Array.isArray((resourcesData as any)?.data)
+            ? (resourcesData as any).data
             : [];
 
       const validResources = resourcesArray.filter((r: any) => r.resource !== null && r.resource !== undefined);
       setResources(validResources);
+      setPosts(postsData?.data || []);
     } catch (error: any) {
       Alert.alert('Lỗi', 'Không thể tải thông tin nhóm');
       navigation.goBack();
@@ -302,14 +311,14 @@ const StudyGroupDetailScreen = ({ route, navigation }: any) => {
           <View style={styles.heroInfo}>
             <Text style={styles.heroName}>{group.name}</Text>
             <View style={styles.heroBadges}>
-              <View style={[styles.heroBadge, group.isPublic ? styles.badgePublic : styles.badgePrivate]}>
+              <View style={[styles.heroBadge, (String(group.isPublic) === 'true' || String(group.isPublic) === '1') ? styles.badgePublic : styles.badgePrivate]}>
                 <Ionicons
-                  name={group.isPublic ? 'earth' : 'lock-closed'}
+                  name={(String(group.isPublic) === 'true' || String(group.isPublic) === '1') ? 'earth' : 'lock-closed'}
                   size={10}
-                  color={group.isPublic ? '#059669' : '#d97706'}
+                  color={(String(group.isPublic) === 'true' || String(group.isPublic) === '1') ? '#059669' : '#d97706'}
                 />
-                <Text style={[styles.heroBadgeText, group.isPublic ? { color: '#059669' } : { color: '#d97706' }]}>
-                  {group.isPublic ? 'Công khai' : 'Riêng tư'}
+                <Text style={[styles.heroBadgeText, (String(group.isPublic) === 'true' || String(group.isPublic) === '1') ? { color: '#059669' } : { color: '#d97706' }]}>
+                  {(String(group.isPublic) === 'true' || String(group.isPublic) === '1') ? 'Công khai' : 'Riêng tư'}
                 </Text>
               </View>
               <View style={styles.heroBadge}>
@@ -341,6 +350,15 @@ const StudyGroupDetailScreen = ({ route, navigation }: any) => {
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
+        {members.some(m => m.userId === user?.id) && (
+          <TouchableOpacity
+            style={[styles.tab, tab === 'posts' && styles.tabActive]}
+            onPress={() => setTab('posts')}
+          >
+            <Ionicons name="chatbox" size={16} color={tab === 'posts' ? '#6366f1' : '#9ca3af'} />
+            <Text style={[styles.tabText, tab === 'posts' && styles.tabTextActive]}>Bài đăng</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.tab, tab === 'info' && styles.tabActive]}
           onPress={() => setTab('info')}
@@ -365,6 +383,113 @@ const StudyGroupDetailScreen = ({ route, navigation }: any) => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {tab === 'posts' && (
+          <View style={styles.tabContent}>
+            {/* Composer */}
+            <View style={styles.composerCard}>
+              <View style={styles.composerRow}>
+                <View style={styles.composerAvatar}>
+                  <Text style={styles.composerAvatarText}>{user?.firstName?.[0]?.toUpperCase() || 'U'}</Text>
+                </View>
+                <TextInput
+                  style={styles.composerInput}
+                  placeholder="Chia sẻ câu hỏi hoặc tài liệu..."
+                  placeholderTextColor="#9ca3af"
+                  value={postContent}
+                  onChangeText={setPostContent}
+                  multiline
+                />
+              </View>
+              {postImageUri && (
+                <View style={styles.composerImagePreview}>
+                  <Image source={{ uri: postImageUri }} style={styles.composerImage} />
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => setPostImageUri(null)}>
+                    <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              <View style={styles.composerActions}>
+                <TouchableOpacity 
+                  style={styles.composerAttachBtn}
+                  onPress={async () => {
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      quality: 0.8,
+                    });
+                    if (!result.canceled && result.assets[0]) {
+                      setPostImageUri(result.assets[0].uri);
+                    }
+                  }}
+                >
+                  <Ionicons name="image-outline" size={20} color="#6366f1" />
+                  <Text style={styles.composerAttachText}>Ảnh</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.postBtn, (!postContent.trim() && !postImageUri) && styles.postBtnDisabled]}
+                  disabled={isPosting || (!postContent.trim() && !postImageUri)}
+                  onPress={async () => {
+                    try {
+                      setIsPosting(true);
+                      const file = postImageUri ? {
+                        uri: postImageUri,
+                        name: 'post.jpg',
+                        type: 'image/jpeg',
+                      } : undefined;
+                      await studyGroupService.createPost(groupId, postContent, undefined, file);
+                      setPostContent('');
+                      setPostImageUri(null);
+                      const newPosts = await studyGroupService.getGroupPosts(groupId, 1, 20).catch(() => ({ data: [] }));
+                      setPosts(newPosts.data);
+                    } catch (e) {
+                      Alert.alert('Lỗi', 'Không thể đăng bài');
+                    } finally {
+                      setIsPosting(false);
+                    }
+                  }}
+                >
+                  {isPosting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.postBtnText}>Đăng</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Posts List */}
+            {posts.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="chatbubbles-outline" size={48} color="#d1d5db" />
+                <Text style={styles.emptyText}>Chưa có bài đăng nào</Text>
+              </View>
+            ) : (
+              posts.map(post => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onLike={async (postId) => {
+                    try {
+                      await studyGroupService.togglePostLike(postId);
+                      setPosts(prev => prev.map(p => {
+                        if (p.id === postId) {
+                          const isLiked = p.likedUserIds?.includes(user?.id);
+                          return { ...p, likeCount: (p.likeCount || 0) + (isLiked ? -1 : 1) };
+                        }
+                        return p;
+                      }));
+                    } catch(e) {}
+                  }}
+                  onComment={async (postId, content) => {
+                    try {
+                      await studyGroupService.createPostComment(postId, content);
+                      // Optimistic or reload
+                    } catch(e) {}
+                  }}
+                  onToggleComments={() => {}}
+                  isCommentsExpanded={false}
+                  comments={[]}
+                />
+              ))
+            )}
+          </View>
+        )}
+
         {tab === 'info' && (
           <View style={styles.tabContent}>
             {/* Rules */}
@@ -862,6 +987,42 @@ const styles = StyleSheet.create({
   // Switch
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   switchInfo: { flex: 1 },
+
+  // Composer
+  composerCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 16, marginBottom: 20,
+    borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  composerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  composerAvatar: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#eef2ff',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  composerAvatarText: { fontSize: 16, fontWeight: '700', color: '#6366f1' },
+  composerInput: {
+    flex: 1, fontSize: 14, color: '#1a1a1a', minHeight: 40,
+    paddingTop: 8, paddingBottom: 8,
+  },
+  composerImagePreview: {
+    marginTop: 12, position: 'relative', borderRadius: 16, overflow: 'hidden',
+  },
+  composerImage: { width: '100%', height: 200, borderRadius: 16 },
+  removeImageBtn: {
+    position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 12, padding: 2,
+  },
+  composerActions: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6',
+  },
+  composerAttachBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#f8f9fc', borderRadius: 12 },
+  composerAttachText: { fontSize: 13, fontWeight: '600', color: '#6366f1' },
+  postBtn: {
+    backgroundColor: '#6366f1', paddingVertical: 8, paddingHorizontal: 20, borderRadius: 12,
+  },
+  postBtnDisabled: { backgroundColor: '#c7d2fe' },
+  postBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   switchLabel: { fontSize: 14, fontWeight: '600', color: '#374151' },
   switchHint: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
 });
