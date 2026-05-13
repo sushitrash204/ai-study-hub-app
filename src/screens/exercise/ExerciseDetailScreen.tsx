@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import * as exerciseService from '../../services/exerciseService';
+import QuestionContentRenderer from '../../components/exercise/QuestionContentRenderer';
 
 type ExerciseDetail = exerciseService.ExerciseDetail;
 type Question = exerciseService.Question;
@@ -525,7 +526,15 @@ export default function ExerciseDetailScreen({ route, navigation }: any) {
                                         />
                                     </View>
                                     <View style={styles.reviewHeaderTextWrap}>
-                                        <Text style={styles.reviewQuestionText}>{idx + 1}. {q.content}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                            <Text style={styles.reviewQuestionText}>{idx + 1}. </Text>
+                                            <View style={{ flex: 1 }}>
+                                                <QuestionContentRenderer 
+                                                    content={q.content} 
+                                                    textStyle={styles.reviewQuestionText} 
+                                                />
+                                            </View>
+                                        </View>
                                         <View style={styles.reviewMetaRow}>
                                             <View style={[styles.reviewStateChip, stateChipStyle]}>
                                                 <Text style={[styles.reviewStateText, stateTextStyle]}>{stateLabel}</Text>
@@ -617,7 +626,10 @@ export default function ExerciseDetailScreen({ route, navigation }: any) {
                         <View style={styles.questionIndexBadge}>
                             <Text style={styles.questionIndexText}>Câu {currentIndex + 1}</Text>
                         </View>
-                        <Text style={styles.questionText}>{q?.content}</Text>
+                        <QuestionContentRenderer 
+                            content={q?.content || ''} 
+                            textStyle={styles.questionText} 
+                        />
                         <Text style={styles.questionPointHint}>Trọng số: {formatPoint(currentQuestionPoint)} điểm</Text>
                     </View>
 

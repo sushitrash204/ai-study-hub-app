@@ -382,7 +382,11 @@ const StudyGroupChatScreen = ({ route, navigation }: any) => {
                 style={styles.resourceCardAction}
                 onPress={() => {
                   if (item.type === 'DOCUMENT' && item.resourceId) {
-                    navigation.navigate('PDFViewer', { documentId: item.resourceId });
+                    navigation.navigate('PDFViewer', { 
+                      documentId: item.resourceId,
+                      url: item.resource?.fileUrl,
+                      title: item.resource?.title
+                    });
                   } else if (item.resourceId) {
                     navigation.navigate('ExerciseDetail', { exerciseId: item.resourceId });
                   }

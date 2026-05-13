@@ -287,9 +287,7 @@ export const uploadAvatar = async (
   const formData = new FormData();
   formData.append('avatar', file as any);
 
-  const response = await api.post(`/study-groups/${groupId}/avatar`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post(`/study-groups/${groupId}/avatar`, formData);
   return response.data;
 };
 
@@ -318,18 +316,42 @@ export const chatWithGroupAI = async (
 
 // ================= COMMUNITY POSTS =================
 
-export const createPost = async (groupId: string, content: string, subjectId?: string, imageFile?: any): Promise<any> => {
+export const uploadPostImage = async (file: any): Promise<string> => {
   const formData = new FormData();
-  formData.append('content', content);
-  if (subjectId) {
-    formData.append('subjectId', subjectId);
-  }
+  
+  // On Android, ensure the URI is properly formatted
+  const uri = file.uri;
+
+  formData.append('file', {
+    uri: uri,
+    type: file.type || 'image/jpeg',
+    name: file.name || 'image.jpg',
+  } as any);
+
+  const response = await api.post('/study-groups/posts/upload-image', formData, {
+    // DO NOT set Content-Type header manually, let Axios/FormData handle it
+    // This is the most common cause of Network Error on Android
+    transformRequest: (data) => {
+      return data;
+    },
+  });
+  return response.data.url;
+};
+
+export const createPost = async (groupId: string, content: string, subjectId?: string, imageFile?: any): Promise<any> => {
+  let imageUrl = undefined;
   if (imageFile) {
-    formData.append('image', imageFile as any);
+    try {
+      imageUrl = await uploadPostImage(imageFile);
+    } catch (e) {
+      console.error('Failed to upload post image:', e);
+    }
   }
 
-  const response = await api.post(`/study-groups/${groupId}/posts`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  const response = await api.post(`/study-groups/${groupId}/posts`, {
+    content,
+    imageUrl,
+    subjectId,
   });
   return response.data;
 };
@@ -364,14 +386,18 @@ export const createPostComment = async (postId: string, content: string, parentC
 };
 
 export const createDiscoveryPost = async (content: string, imageFile?: any): Promise<any> => {
-  const formData = new FormData();
-  formData.append('content', content);
+  let imageUrl = undefined;
   if (imageFile) {
-    formData.append('image', imageFile as any);
+    try {
+      imageUrl = await uploadPostImage(imageFile);
+    } catch (e) {
+      console.error('Failed to upload discovery post image:', e);
+    }
   }
 
-  const response = await api.post('/study-groups/discovery-posts', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  const response = await api.post('/study-groups/discovery-posts', {
+    content,
+    imageUrl,
   });
   return response.data;
 };

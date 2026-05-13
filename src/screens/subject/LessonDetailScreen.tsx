@@ -19,12 +19,16 @@ import { getSubjectLessonDetail } from '../../services/subjectService';
 import { getExercisesBySubject } from '../../services/exerciseService';
 import { getDocumentsBySubject } from '../../services/documentService';
 import MathView from '../../components/MathView';
+import QuestionContentRenderer from '../../components/exercise/QuestionContentRenderer';
 
 const BlockRenderer = ({ block }: { block: LessonBlock }) => {
     if (block.type === 'header') {
         return (
             <View style={styles.blockCard}>
-                <Text style={styles.headerText}>{block.data?.text || 'Tiêu đề'}</Text>
+                <QuestionContentRenderer 
+                    content={block.data?.text || 'Tiêu đề'} 
+                    textStyle={styles.headerText} 
+                />
             </View>
         );
     }
@@ -86,7 +90,10 @@ const BlockRenderer = ({ block }: { block: LessonBlock }) => {
 
         return (
             <View style={[styles.blockCard, toneStyle]}>
-                <Text style={styles.paragraphText}>{block.data?.text || 'Nội dung ghi chú'}</Text>
+                <QuestionContentRenderer 
+                    content={block.data?.text || 'Nội dung ghi chú'} 
+                    textStyle={styles.paragraphText} 
+                />
             </View>
         );
     }
@@ -97,7 +104,10 @@ const BlockRenderer = ({ block }: { block: LessonBlock }) => {
 
     return (
         <View style={styles.blockCard}>
-            <Text style={styles.paragraphText}>{block.data?.text || ''}</Text>
+            <QuestionContentRenderer 
+                content={block.data?.text || ''} 
+                textStyle={styles.paragraphText} 
+            />
         </View>
     );
 };

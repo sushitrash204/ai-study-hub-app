@@ -41,10 +41,13 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
   const [isPublic, setIsPublic] = useState(true);
   const [creating, setCreating] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [commPostContent, setCommPostContent] = useState('');
+  const [commPostImageUri, setCommPostImageUri] = useState<string | null>(null);
+  const [isPostingComm, setIsPostingComm] = useState(false);
 
   useEffect(() => {
     loadGroups();
-  }, []);
+  }, [tab]);
 
   // Server-side search debounce cho nhóm công khai
   useEffect(() => {
@@ -59,32 +62,34 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
   const loadGroups = async () => {
     try {
       setLoading(true);
-      const [myGroupsData, publicGroupsData, feedData, savedData] = await Promise.all([
-        studyGroupService.getUserStudyGroups(),
-        studyGroupService.listStudyGroups(1, 50, tab === 'public' ? searchQuery : undefined),
-        tab === 'community' ? studyGroupService.getDiscoveryFeed(1, 20) : Promise.resolve({ data: communityPosts }),
-        tab === 'saved' ? studyGroupService.getSavedPosts(1, 50) : Promise.resolve({ data: savedPosts }),
-      ]);
-
-      const myGroupsArray = Array.isArray(myGroupsData) ? myGroupsData : [];
-
-      const publicGroupsArray = Array.isArray(publicGroupsData?.groups)
-        ? publicGroupsData.groups
-        : Array.isArray(publicGroupsData?.data)
-          ? publicGroupsData.data
-          : Array.isArray(publicGroupsData)
-            ? publicGroupsData
-            : [];
-
-      setMyGroups(myGroupsArray);
-      setPublicGroups(publicGroupsArray);
       
-      if (tab === 'community' && feedData?.data) {
-        setCommunityPosts(feedData.data);
+      // Fetch only what's needed for the current tab to improve performance
+      if (tab === 'my') {
+        const myGroupsData = await studyGroupService.getUserStudyGroups();
+        setMyGroups(Array.isArray(myGroupsData) ? myGroupsData : []);
+      } 
+      else if (tab === 'public') {
+        const publicGroupsData = await studyGroupService.listStudyGroups(1, 50, searchQuery);
+        const publicGroupsArray = Array.isArray(publicGroupsData?.groups)
+          ? publicGroupsData.groups
+          : Array.isArray(publicGroupsData?.data)
+            ? publicGroupsData.data
+            : Array.isArray(publicGroupsData)
+              ? publicGroupsData
+              : [];
+        setPublicGroups(publicGroupsArray);
       }
-
-      if (tab === 'saved' && savedData?.data) {
-        setSavedPosts(savedData.data);
+      else if (tab === 'community') {
+        const feedData = await studyGroupService.getDiscoveryFeed(1, 20);
+        if (feedData?.data) {
+          setCommunityPosts(feedData.data);
+        }
+      }
+      else if (tab === 'saved') {
+        const savedData = await studyGroupService.getSavedPosts(1, 50);
+        if (savedData?.data) {
+          setSavedPosts(savedData.data);
+        }
       }
     } catch (error: any) {
       console.error('Error loading groups:', error);
@@ -244,8 +249,6 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
     ? Array.isArray(groups) ? groups.filter((g: any) => g.name?.toLowerCase().includes(searchQuery.toLowerCase())) : []
     : groups; // publicGroups đã được search trên server
 
-  const [commPostContent, setCommPostContent] = useState('');
-  const [isPostingComm, setIsPostingComm] = useState(false);
 
   const handleLikePost = async (postId: string) => {
     try {
@@ -271,16 +274,41 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
     }
   };
 
+  const handlePickCommImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Lỗi', 'Cần cấp quyền truy cập thư viện ảnh');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setCommPostImageUri(result.assets[0].uri);
+    }
+  };
+
   const handleCreateCommunityPost = async () => {
-    if (!commPostContent.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập nội dung');
+    if (!commPostContent.trim() && !commPostImageUri) {
+      Alert.alert('Lỗi', 'Vui lòng nhập nội dung hoặc chọn ảnh');
       return;
     }
 
     try {
       setIsPostingComm(true);
-      await studyGroupService.createDiscoveryPost(commPostContent.trim());
+      const file = commPostImageUri ? {
+        uri: commPostImageUri,
+        name: 'post.jpg',
+        type: 'image/jpeg',
+      } : undefined;
+
+      await studyGroupService.createDiscoveryPost(commPostContent.trim(), file);
       setCommPostContent('');
+      setCommPostImageUri(null);
       loadGroups();
       Alert.alert('Thành công', 'Đã đăng bài lên cộng đồng');
     } catch (error: any) {
@@ -388,12 +416,25 @@ const StudyGroupsListScreen = ({ navigation }: any) => {
                     multiline
                   />
                 </View>
+
+                {commPostImageUri && (
+                  <View style={styles.composerImagePreview}>
+                    <Image source={{ uri: commPostImageUri }} style={styles.composerImage} />
+                    <TouchableOpacity style={styles.removeImageBtn} onPress={() => setCommPostImageUri(null)}>
+                      <Ionicons name="close-circle" size={24} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 <View style={styles.composerFooter}>
-                  <Text style={styles.composerTarget}>Đăng lên Cộng đồng</Text>
+                  <TouchableOpacity style={styles.attachBtn} onPress={handlePickCommImage}>
+                    <Ionicons name="image-outline" size={20} color="#6366f1" />
+                    <Text style={styles.attachText}>Ảnh</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[styles.miniPostBtn, !commPostContent.trim() && styles.miniPostBtnDisabled]}
+                    style={[styles.miniPostBtn, (!commPostContent.trim() && !commPostImageUri) && styles.miniPostBtnDisabled]}
                     onPress={handleCreateCommunityPost}
-                    disabled={isPostingComm || !commPostContent.trim()}
+                    disabled={isPostingComm || (!commPostContent.trim() && !commPostImageUri)}
                   >
                     {isPostingComm ? (
                       <ActivityIndicator size="small" color="#fff" />
@@ -787,6 +828,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     minHeight: 40,
   },
+  composerImagePreview: { position: 'relative', marginTop: 12, marginBottom: 8 },
+  composerImage: { width: '100%', height: 200, borderRadius: 12 },
+  removeImageBtn: { position: 'absolute', top: 8, right: 8 },
   composerFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -796,12 +840,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
-  composerTarget: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#10b981',
-    textTransform: 'uppercase',
-  },
+  attachBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  attachText: { fontSize: 13, color: '#4b5563', fontWeight: '500' },
   miniPostBtn: {
     backgroundColor: '#6366f1',
     paddingHorizontal: 16,

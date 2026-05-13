@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import QuestionContentRenderer from '../exercise/QuestionContentRenderer';
 
 interface PostCardProps {
   post: any;
@@ -126,10 +127,10 @@ const PostCard = ({
 
       {/* Content */}
       <View style={styles.content}>
-        <Text style={styles.contentText}>
-          {displayedContent}
-          {shouldTruncate && !isExpanded && '...'}
-        </Text>
+        <QuestionContentRenderer 
+          content={displayedContent + (shouldTruncate && !isExpanded ? '...' : '')} 
+          textStyle={styles.contentText} 
+        />
         {shouldTruncate && !isExpanded && (
           <TouchableOpacity onPress={() => setIsExpanded(true)}>
             <Text style={styles.readMoreText}>Xem thêm</Text>

@@ -291,11 +291,21 @@ const StudyGroupDetailScreen = ({ route, navigation }: any) => {
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{group.name}</Text>
-        {isOwner && (
-          <TouchableOpacity onPress={openEditModal} style={styles.editBtn}>
-            <Ionicons name="create-outline" size={20} color="#6366f1" />
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerActions}>
+          {members.some(m => m.userId === user?.id) && (
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('StudyGroupChat', { groupId })} 
+              style={styles.chatHeaderBtn}
+            >
+              <Ionicons name="chatbubbles-outline" size={22} color="#6366f1" />
+            </TouchableOpacity>
+          )}
+          {isOwner && (
+            <TouchableOpacity onPress={openEditModal} style={styles.editBtn}>
+              <Ionicons name="create-outline" size={20} color="#6366f1" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Hero Section */}
@@ -770,7 +780,9 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f5f5f5', justifyContent: 'center', alignItems: 'center' },
   editBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#eef2ff', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', flex: 1, marginHorizontal: 12 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', flex: 1, marginLeft: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chatHeaderBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f5f3ff', justifyContent: 'center', alignItems: 'center' },
 
   // Hero
   hero: {

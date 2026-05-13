@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import SyntaxHighlighter from 'react-native-syntax-highlighter';
 import atomDark from 'react-syntax-highlighter/dist/esm/styles/prism/atom-dark';
 import MathView from './MathView';
+import QuestionContentRenderer from './exercise/QuestionContentRenderer';
 
 interface ChatMarkdownMessageProps {
     content: string;
@@ -830,9 +831,14 @@ export default function ChatMarkdownMessage({ content, isUser, fillWidth = true 
                             shouldFillWidth ? styles.markdownSegmentFill : styles.markdownSegmentAuto,
                         ]}
                     >
-                        <Markdown markdownit={markdownit as any} style={markdownStyles as any} rules={markdownRules as any}>
-                            {segment.text}
-                        </Markdown>
+                        <QuestionContentRenderer 
+                            content={segment.text}
+                            renderText={(text) => (
+                                <Markdown markdownit={markdownit as any} style={markdownStyles as any} rules={markdownRules as any}>
+                                    {text}
+                                </Markdown>
+                            )}
+                        />
                     </View>
                 );
             })}
